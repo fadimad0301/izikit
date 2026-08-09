@@ -2,8 +2,94 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Button } from '@/components/ui';
+import { Button, Badge } from '@/components/ui';
 import { useReducedMotion, DOXI_EASE } from '@/lib/motion';
+
+// Real, derivable facts (not marketing metrics) — kept in sync with the
+// sections they summarize: HowItWorks' 3 steps, TrustBar's 5 programs,
+// and Pricing's free entry tier. See STEPS.length / PROGRAMS.length in
+// those files if these numbers ever drift.
+const STATS = [
+  {
+    label: 'Étapes guidées',
+    value: '3',
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"
+      />
+    ),
+  },
+  {
+    label: 'Programmes couverts',
+    value: '5',
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M3 21V5a2 2 0 012-2h6l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2H9l-4 4z"
+      />
+    ),
+  },
+  {
+    label: 'CV bilingue inclus',
+    value: '1',
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M12 12a4 4 0 100-8 4 4 0 000 8z M4.5 20c0-4.14 3.36-6.5 7.5-6.5s7.5 2.36 7.5 6.5"
+      />
+    ),
+  },
+  {
+    label: 'Pour démarrer',
+    value: 'Gratuit',
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M20 12v7a1 1 0 01-1 1H5a1 1 0 01-1-1v-7M2 7h20v5H2V7zM12 7v13M12 7c-1.5-3-6-3-6 0s4.5 3 6 0zM12 7c1.5-3 6-3 6 0s-4.5 3-6 0z"
+      />
+    ),
+  },
+] as const;
+
+function HeroStats() {
+  const reduceMotion = useReducedMotion();
+  return (
+    <motion.dl
+      initial={{ opacity: 0, y: reduceMotion ? 0 : 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reduceMotion ? 0 : 0.5, delay: 0.3, ease: DOXI_EASE }}
+      className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4"
+    >
+      {STATS.map((stat) => (
+        <div
+          key={stat.label}
+          className="rounded-xl border border-ink-900/8 bg-white px-4 py-3 shadow-sm"
+        >
+          <svg
+            className="h-5 w-5 text-seal-gold"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            {stat.icon}
+          </svg>
+          <dd className="mt-2 font-serif text-xl text-ink-900">{stat.value}</dd>
+          <dt className="text-xs text-charcoal-900/60">{stat.label}</dt>
+        </div>
+      ))}
+    </motion.dl>
+  );
+}
 
 // No hero video asset yet — per the design brief, the fallback when no
 // footage exists is a lightweight animated scene instead of a static image.
@@ -16,6 +102,7 @@ function HeroIllustration() {
 
   return (
     <div className="relative mx-auto aspect-square w-full max-w-sm" aria-hidden="true">
+      <div className="absolute inset-0 -z-10 rounded-full bg-seal-gold/10 blur-3xl" />
       <motion.div
         className="absolute inset-x-8 top-10 h-48 rounded-2xl bg-paper-100 shadow-md"
         initial={{ opacity: 0, y: reduceMotion ? 0 : 40, rotate: reduceMotion ? 0 : -6 }}
@@ -61,13 +148,23 @@ export function Hero() {
   return (
     <div className="grid items-center gap-12 md:grid-cols-2">
       <div>
-        <motion.h1
+        <motion.div
           initial={{ opacity: 0, y: reduceMotion ? 0 : 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: reduceMotion ? 0 : 0.5, ease: DOXI_EASE }}
-          className="font-serif text-4xl leading-tight text-ink-900 md:text-5xl"
         >
-          Ton dossier d’études à l’étranger, sans stress
+          <Badge variant="gold">CV · Checklist · Candidature</Badge>
+        </motion.div>
+        <motion.h1
+          initial={{ opacity: 0, y: reduceMotion ? 0 : 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.5, delay: 0.05, ease: DOXI_EASE }}
+          className="mt-4 font-serif text-4xl leading-tight text-ink-900 md:text-5xl"
+        >
+          Ton dossier d’études à l’étranger,{' '}
+          <span className="bg-gradient-to-r from-ink-900 to-seal-gold bg-clip-text text-transparent">
+            sans stress
+          </span>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: reduceMotion ? 0 : 16 }}
@@ -96,6 +193,7 @@ export function Hero() {
         <p className="mt-4 text-xs text-charcoal-900/50">
           Conforme aux exigences officielles des programmes de bourses et d’admission.
         </p>
+        <HeroStats />
       </div>
       <HeroIllustration />
     </div>

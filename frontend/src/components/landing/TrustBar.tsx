@@ -13,7 +13,21 @@ export function TrustBar() {
         </span>
         <div className="flex flex-wrap items-center gap-2">
           {PROGRAMS.map((name) => (
-            <Badge key={name} variant="neutral">
+            <Badge key={name} variant="neutral" className="gap-1.5">
+              <svg
+                className="h-3 w-3 text-seal-gold"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2.5}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
               {name}
             </Badge>
           ))}
