@@ -1,6 +1,8 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useReducedMotion, DURATION } from '@/lib/motion';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -8,7 +10,6 @@ interface Toast {
   id: number;
   message: string;
   type: ToastType;
-  exiting?: boolean;
 }
 
 interface ToastContextValue {
@@ -22,21 +23,24 @@ const ToastContext = createContext<ToastContextValue>({
 });
 
 const TOAST_DURATION = 3000;
-const FADE_OUT_DURATION = 300;
+
+const TYPE_CLASSES: Record<ToastType, string> = {
+  success: 'border-success-600/20 text-success-600',
+  error: 'border-error-600/20 text-error-600',
+  info: 'border-ink-900/15 text-ink-900',
+};
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextIdRef = useRef(0);
+  const reduceMotion = useReducedMotion();
 
   const addToast = useCallback((message: string, type: ToastType = 'success') => {
     const id = nextIdRef.current++;
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
-      setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
-    }, TOAST_DURATION);
-    setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, TOAST_DURATION + FADE_OUT_DURATION);
+    }, TOAST_DURATION);
   }, []);
 
   return (
@@ -48,23 +52,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-atomic="true"
         className="pointer-events-none fixed top-0 left-0 right-0 z-[100] flex flex-col items-center gap-2 px-4 pt-4"
       >
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`pointer-events-auto flex items-center gap-3 rounded-2xl border px-5 py-3.5 text-sm font-medium shadow-lg transition-opacity ${
-              t.exiting ? 'opacity-0' : 'opacity-100'
-            } ${
-              t.type === 'success'
-                ? 'border-green-200 bg-white text-green-700'
-                : t.type === 'error'
-                  ? 'border-red-200 bg-white text-red-700'
-                  : 'border-gray-200 bg-white text-gray-700'
-            }`}
-            style={{ maxWidth: '90vw' }}
-          >
-            {t.message}
-          </div>
-        ))}
+        <AnimatePresence>
+          {toasts.map((t) => (
+            <motion.div
+              key={t.id}
+              layout
+              initial={{ opacity: 0, y: reduceMotion ? 0 : -16, scale: reduceMotion ? 1 : 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.98 }}
+              transition={{ duration: reduceMotion ? 0 : DURATION.base }}
+              className={`pointer-events-auto flex items-center gap-3 rounded-2xl border bg-paper-50 px-5 py-3.5 text-sm font-medium shadow-lg ${TYPE_CLASSES[t.type]}`}
+              style={{ maxWidth: '90vw' }}
+            >
+              {t.message}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </ToastContext.Provider>
   );

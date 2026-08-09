@@ -1,19 +1,13 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
+import { newsreader, ibmPlexMono, generalSans } from './fonts';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-// Replace these with your app name + description per fork.
 export const metadata: Metadata = {
-  title: 'izi kit',
-  description: 'Headless Next.js 16 starter — auth, payments, admin, webhooks, cron.',
+  title: 'Doxi — Prépare ton dossier d’études à l’étranger',
+  description:
+    "Doxi t'accompagne pour préparer ton CV, ta checklist de documents et ton dossier de candidature (bourses, admissions, visas).",
 };
 
 export default function RootLayout({
@@ -22,8 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className={inter.className}>
+    <html
+      lang="fr"
+      className={`${newsreader.variable} ${generalSans.variable} ${ibmPlexMono.variable}`}
+    >
+      <body className={generalSans.className}>
         <ToastProvider>
           <AuthProvider>{children}</AuthProvider>
         </ToastProvider>

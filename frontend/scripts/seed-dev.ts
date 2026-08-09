@@ -11,6 +11,7 @@
 // mocked PrismaClient (no DB connection at module import time). The CLI
 // guard at the bottom mirrors `make-superadmin.ts:85-92`.
 
+import { pathToFileURL } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -67,7 +68,7 @@ export async function main(_args: string[] = [], deps: SeedDeps = {}): Promise<v
 
 // CLI entrypoint guard — only run when invoked as a script, not when
 // imported by tests.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main()
     .then(() => process.exit(0))
     .catch((err) => {
