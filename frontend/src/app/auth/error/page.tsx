@@ -16,6 +16,8 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { Card } from '@/components/ui';
+import { Logo } from '@/components/brand/Logo';
 
 const ERROR_MESSAGES: Record<string, string> = {
   GOOGLE_EMAIL_NOT_VERIFIED:
@@ -37,20 +39,34 @@ function AuthErrorBody() {
     'Une erreur inconnue est survenue pendant la connexion. Réessayez.';
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4">
-      <h1 className="text-2xl font-bold">Échec de connexion</h1>
-      <p className="text-sm text-gray-700">{message}</p>
-      {code && <p className="font-mono text-xs text-gray-400">code: {code}</p>}
-      <div className="flex flex-col gap-2">
-        <Link
-          href="/login"
-          className="rounded-md bg-black px-5 py-2.5 text-center text-sm font-medium text-white hover:bg-gray-800"
-        >
-          Retour à la connexion
-        </Link>
-        <Link href="/" className="text-center text-sm text-gray-600 underline">
-          Accueil
-        </Link>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-paper-50 px-4 py-12">
+      <Logo />
+      <div className="w-full max-w-md">
+        <Card bordered elevated className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1.5">
+            <h1 className="font-serif text-2xl text-ink-900">Échec de connexion</h1>
+            <p className="text-sm text-charcoal-900/70">{message}</p>
+          </div>
+          {code && (
+            <p className="font-mono text-xs text-charcoal-900/40" aria-hidden="true">
+              code : {code}
+            </p>
+          )}
+          <div className="flex flex-col gap-3">
+            <Link
+              href="/login"
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-ink-900 px-5 text-sm font-medium text-paper-50 transition-colors hover:bg-ink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal-gold focus-visible:ring-offset-2"
+            >
+              Retour à la connexion
+            </Link>
+            <Link
+              href="/"
+              className="text-center text-sm text-ink-900 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-seal-gold focus-visible:ring-offset-2"
+            >
+              Accueil
+            </Link>
+          </div>
+        </Card>
       </div>
     </main>
   );
