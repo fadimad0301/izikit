@@ -42,6 +42,7 @@ model User {
   withdrawals       Withdrawal[]
   oauthAccounts     OAuthAccount[]
   adminActions      AdminAction[]
+  cvProfile         CvProfile?
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
@@ -177,6 +178,30 @@ model FileUpload {
 
   @@index([userId])
   @@index([createdAt])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Doxi — CV builder draft. One in-progress draft per user for now (the
+// multi-step wizard in a later phase writes into `answers`). Once the
+// wizard supports naming/saving multiple finished CVs, this becomes the
+// "draft" row and a separate `Cv` (plural, named, finalized) model is
+// added alongside it — not a rename of this one.
+// ───────────────────────────────────────────────────────────────────────
+model CvProfile {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetCountry String?
+  targetField   String?
+  // Freeform structured answers from the multi-step wizard — shape owned by
+  // frontend/src/lib/validation/cv-wizard.ts, not enforced at the DB layer.
+  answers       Json      @default("{}")
+  // Last AI-generated CV (GeneratedCv shape from cv-wizard.ts). Regenerating
+  // overwrites this — history isn't kept in Phase 3.
+  generatedCv   Json?
+  generatedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 // ───────────────────────────────────────────────────────────────────────
