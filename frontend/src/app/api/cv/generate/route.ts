@@ -1,8 +1,12 @@
 // Doxi — POST /api/cv/generate
 //
 // Pipeline: CSRF → auth → load+validate answers (all 5 steps required) →
-// per-user rate limit (5/24h) → AI provider (503 if unconfigured, 502 if it
-// throws) → persist generatedCv/generatedAt → return.
+// AI provider (503 if unconfigured) → per-user rate limit (5/24h) →
+// generate (502 if it throws) → persist generatedCv/generatedAt → return.
+//
+// The provider check runs BEFORE the rate limit on purpose: a misconfigured
+// deploy (no ANTHROPIC_API_KEY) must not burn a user's daily quota for
+// requests that never reach the AI at all.
 //
 // Wizard answers are never touched by this route — a failed generation
 // (rate limit, AI down) leaves the student's filled-in steps exactly as
@@ -59,9 +63,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const limited = await limiter.check(auth.user.sub);
-    if (limited) return limited;
-
     const ai = getAiProvider();
     if (!ai) {
       return NextResponse.json(
@@ -69,6 +70,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 503, headers: { 'x-request-id': ctx.requestId } },
       );
     }
+
+    const limited = await limiter.check(auth.user.sub);
+    if (limited) return limited;
 
     let generatedCv;
     try {

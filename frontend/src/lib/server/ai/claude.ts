@@ -65,7 +65,14 @@ export function createClaudeProvider(options: CreateClaudeProviderOptions): AiPr
     async generateCv({ answers }: CvGenerationInput): Promise<GeneratedCv> {
       const response = await client.messages.create({
         model,
-        max_tokens: 2048,
+        // 8000 (not 2048): a 5-section CV with multiple bullets per section
+        // is non-trivial structured output on its own, and this model's
+        // `messages.create` budgets thinking tokens (if any) out of the same
+        // max_tokens pool as the tool_use output. `thinking` is intentionally
+        // left unset — forcing tool_choice to a specific tool (below) already
+        // precludes extended thinking for this call, so there's no separate
+        // budget to reclaim by disabling it explicitly.
+        max_tokens: 8000,
         system: buildSystemPrompt(),
         messages: [{ role: 'user', content: buildUserPrompt(answers) }],
         tools: [CV_TOOL],

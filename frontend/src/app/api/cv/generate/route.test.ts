@@ -102,6 +102,16 @@ describe('POST /api/cv/generate', () => {
     expect(body.error).toBe('AI_NOT_CONFIGURED');
   });
 
+  it('does not consume rate-limit quota when AI is not configured', async () => {
+    cvProfileFindUnique.mockResolvedValueOnce({ answers: COMPLETE_ANSWERS });
+    const { getAiProvider } = await import('@/lib/server/ai');
+    (getAiProvider as unknown as Mock).mockReturnValueOnce(null);
+    const { POST } = await import('./route');
+    const res = await POST(makeReq() as never);
+    expect(res.status).toBe(503);
+    expect(limiterCheck).not.toHaveBeenCalled();
+  });
+
   it('returns 502 AI_GENERATION_FAILED when the provider throws', async () => {
     cvProfileFindUnique.mockResolvedValueOnce({ answers: COMPLETE_ANSWERS });
     generateCv.mockImplementationOnce(async () => {

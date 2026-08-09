@@ -43,6 +43,18 @@ const STEP_LABELS: Record<WizardStepKey, string> = {
   objective: 'Objectif',
 };
 
+// `api.ts` (PROTECTED) sets `ApiError.message` from the response body's
+// `error` field — the stable English code, not the user-facing copy. Every
+// Phase 3 route also returns a French `message` field in its body, reachable
+// via `err.body.message`. Prefer that; fall back if it's absent/malformed.
+function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    const serverMessage = err.body.message;
+    if (typeof serverMessage === 'string' && serverMessage.length > 0) return serverMessage;
+  }
+  return fallback;
+}
+
 export default function CvBuilderPage() {
   const user = useUser();
   const { toast } = useToast();
@@ -78,7 +90,7 @@ export default function CvBuilderPage() {
       setAnswers(res.answers);
       return true;
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue.', 'error');
+      toast(apiErrorMessage(err, 'Une erreur est survenue.'), 'error');
       return false;
     }
   }
@@ -93,7 +105,7 @@ export default function CvBuilderPage() {
       setView('preview');
       toast('Ton CV a été généré.', 'success');
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'La génération a échoué.', 'error');
+      toast(apiErrorMessage(err, 'La génération a échoué.'), 'error');
     } finally {
       setGenerating(false);
     }
