@@ -1,67 +1,105 @@
-// /cv — CV Builder entry point.
+// /cv — CV Builder: 5-step questionnaire → AI generation → printable preview.
 //
-// Phase 2 scope: capture the two inputs that drive CV generation (target
-// country + target field) and persist them as a draft via /api/cv. The
-// actual multi-step wizard (education, experience, skills, format) is a
-// later phase — this screen proves the model + route + auth gate end to
-// end without a half-built wizard behind it.
+// Each step auto-saves via PATCH /api/cv on "Suivant" (resumable — closing
+// the tab and coming back keeps prior steps). The last step's submit calls
+// POST /api/cv/generate and swaps into the preview view. Regenerating from
+// the preview goes back through the same generate call.
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { Card, Input, Button, Badge } from '@/components/ui';
+import { ProgressBar } from '@/components/ui';
+import {
+  IdentityStepForm,
+  EducationStepForm,
+  ExperienceStepForm,
+  SkillsStepForm,
+  ObjectiveStepForm,
+} from '@/components/cv';
+import { CvPreview } from '@/components/cv/CvPreview';
+import {
+  WIZARD_STEPS,
+  type CvAnswers,
+  type GeneratedCv,
+  type WizardStepKey,
+} from '@/lib/validation/cv-wizard';
 
 interface CvDraft {
   targetCountry: string | null;
   targetField: string | null;
+  answers: CvAnswers;
+  generatedCv: GeneratedCv | null;
+  generatedAt: string | null;
   updatedAt: string | null;
 }
+
+const STEP_LABELS: Record<WizardStepKey, string> = {
+  identity: 'Identité',
+  education: 'Formation',
+  experience: 'Expériences',
+  skills: 'Compétences & langues',
+  objective: 'Objectif',
+};
 
 export default function CvBuilderPage() {
   const user = useUser();
   const { toast } = useToast();
-  const [draft, setDraft] = useState<CvDraft | null>(null);
-  const [targetCountry, setTargetCountry] = useState('');
-  const [targetField, setTargetField] = useState('');
+  const [answers, setAnswers] = useState<CvAnswers>({});
+  const [generatedCv, setGeneratedCv] = useState<GeneratedCv | null>(null);
+  const [stepIndex, setStepIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [view, setView] = useState<'wizard' | 'preview'>('wizard');
 
   useEffect(() => {
     if (!user) return;
     api<CvDraft>('/api/cv')
       .then((res) => {
-        setDraft(res);
-        setTargetCountry(res.targetCountry ?? '');
-        setTargetField(res.targetField ?? '');
+        setAnswers(res.answers);
+        setGeneratedCv(res.generatedCv);
+        if (res.generatedCv) setView('preview');
+        const firstIncomplete = WIZARD_STEPS.findIndex((step) => !res.answers[step]);
+        setStepIndex(firstIncomplete === -1 ? WIZARD_STEPS.length - 1 : firstIncomplete);
       })
       .catch(() => {
-        // First visit — no draft yet, form stays empty.
+        // First visit — no draft yet, wizard starts empty at step 0.
       })
       .finally(() => setLoading(false));
   }, [user]);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
+  async function saveStep(step: WizardStepKey, data: CvAnswers[WizardStepKey]) {
     try {
       const res = await api<CvDraft>('/api/cv', {
         method: 'PATCH',
-        body: { targetCountry, targetField },
+        body: { answers: { [step]: data } },
       });
-      setDraft(res);
-      toast('Ton espace CV est enregistré.', 'success');
+      setAnswers(res.answers);
+      return true;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Une erreur est survenue.');
-    } finally {
-      setSaving(false);
+      toast(err instanceof ApiError ? err.message : 'Une erreur est survenue.', 'error');
+      return false;
     }
   }
 
-  if (!user) {
+  async function handleGenerate() {
+    setGenerating(true);
+    try {
+      const res = await api<{ generatedCv: GeneratedCv; generatedAt: string }>('/api/cv/generate', {
+        method: 'POST',
+      });
+      setGeneratedCv(res.generatedCv);
+      setView('preview');
+      toast('Ton CV a été généré.', 'success');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'La génération a échoué.', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  if (!user || loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-paper-50">
         <p className="text-sm text-charcoal-900/60">Chargement…</p>
@@ -69,65 +107,87 @@ export default function CvBuilderPage() {
     );
   }
 
+  if (view === 'preview' && generatedCv) {
+    return (
+      <CvPreview
+        generatedCv={generatedCv}
+        onEdit={() => setView('wizard')}
+        onRegenerate={handleGenerate}
+        regenerating={generating}
+      />
+    );
+  }
+
+  const currentStep = WIZARD_STEPS[stepIndex]!;
+  const isLastStep = stepIndex === WIZARD_STEPS.length - 1;
+
+  async function handleStepSubmit(data: CvAnswers[typeof currentStep]) {
+    const saved = await saveStep(currentStep, data);
+    if (!saved) return;
+    if (isLastStep) {
+      await handleGenerate();
+    } else {
+      setStepIndex((i) => i + 1);
+    }
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-4 py-16">
       <div>
         <p className="text-xs font-semibold tracking-wide text-seal-gold uppercase">CV Builder</p>
-        <h1 className="mt-2 font-serif text-3xl text-ink-900">
-          Construis un CV adapté à ta candidature
-        </h1>
-        <p className="mt-2 text-sm text-charcoal-900/70">
-          Indique ton pays cible et ton domaine — Doxi s’en sert pour structurer ton CV aux bons
-          standards.
-        </p>
+        <h1 className="mt-2 font-serif text-3xl text-ink-900">Construis ton CV</h1>
+        <ProgressBar
+          className="mt-4"
+          value={stepIndex + 1}
+          max={WIZARD_STEPS.length}
+          label={`Étape ${stepIndex + 1}/${WIZARD_STEPS.length} — ${STEP_LABELS[currentStep]}`}
+        />
       </div>
 
-      <Card bordered elevated className="flex flex-col gap-5">
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
-          <Input
-            label="Pays cible"
-            placeholder="ex : France, Canada, Maroc…"
-            value={targetCountry}
-            onChange={(e) => setTargetCountry(e.target.value)}
-            disabled={loading}
-            maxLength={100}
-          />
-          <Input
-            label="Domaine d’études visé"
-            placeholder="ex : Informatique, Gestion, Médecine…"
-            value={targetField}
-            onChange={(e) => setTargetField(e.target.value)}
-            disabled={loading}
-            maxLength={100}
-          />
-          {error && (
-            <p role="alert" className="text-sm text-error-600">
-              {error}
-            </p>
-          )}
-          <Button type="submit" loading={saving} disabled={loading} className="w-full">
-            Enregistrer
-          </Button>
-        </form>
-      </Card>
+      {stepIndex > 0 && (
+        <button
+          type="button"
+          onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+          className="self-start text-sm text-ink-900/70 underline underline-offset-2"
+        >
+          ← Étape précédente
+        </button>
+      )}
 
-      <Card bordered className="flex items-start justify-between gap-4">
-        <div>
-          <p className="font-medium text-ink-900">Étape suivante : le questionnaire guidé</p>
-          <p className="mt-1 text-sm text-charcoal-900/70">
-            Formations, expériences, compétences et génération du CV — disponible dans la prochaine
-            mise à jour.
-          </p>
-        </div>
-        <Badge variant="neutral" className="shrink-0">
-          Bientôt
-        </Badge>
-      </Card>
-
-      {draft?.updatedAt && (
-        <p className="text-xs text-charcoal-900/40">
-          Dernière sauvegarde : {new Date(draft.updatedAt).toLocaleString('fr-FR')}
-        </p>
+      {currentStep === 'identity' && (
+        <IdentityStepForm
+          defaultValues={answers.identity ?? {}}
+          onSubmit={handleStepSubmit}
+          submitLabel="Suivant"
+        />
+      )}
+      {currentStep === 'education' && (
+        <EducationStepForm
+          defaultValues={answers.education ?? {}}
+          onSubmit={handleStepSubmit}
+          submitLabel="Suivant"
+        />
+      )}
+      {currentStep === 'experience' && (
+        <ExperienceStepForm
+          defaultValues={answers.experience ?? {}}
+          onSubmit={handleStepSubmit}
+          submitLabel="Suivant"
+        />
+      )}
+      {currentStep === 'skills' && (
+        <SkillsStepForm
+          defaultValues={answers.skills ?? {}}
+          onSubmit={handleStepSubmit}
+          submitLabel="Suivant"
+        />
+      )}
+      {currentStep === 'objective' && (
+        <ObjectiveStepForm
+          defaultValues={answers.objective ?? {}}
+          onSubmit={handleStepSubmit}
+          submitLabel={generating ? 'Génération…' : 'Générer mon CV'}
+        />
       )}
     </main>
   );
