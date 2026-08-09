@@ -72,10 +72,10 @@ function HeroStats() {
       {STATS.map((stat) => (
         <div
           key={stat.label}
-          className="rounded-xl border border-ink-900/8 bg-white px-4 py-3 shadow-sm"
+          className="rounded-xl border border-ink-900/8 bg-white px-4 py-3 shadow-doxi-1"
         >
           <svg
-            className="h-5 w-5 text-seal-gold"
+            className="h-5 w-5 text-ink-900/35"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -128,12 +128,12 @@ function HeroIllustration() {
       </motion.div>
       <motion.div
         className="absolute right-4 bottom-6 flex h-16 w-16 items-center justify-center rounded-full border-4 border-seal-gold font-serif text-xs font-semibold text-seal-gold"
-        initial={{ opacity: 0, scale: reduceMotion ? 1 : 1.6, rotate: reduceMotion ? -18 : -28 }}
+        initial={{ opacity: 0, scale: reduceMotion ? 1 : 1.4, rotate: reduceMotion ? -18 : -24 }}
         animate={{ opacity: 1, scale: 1, rotate: -18 }}
         transition={
           reduceMotion
             ? { duration: 0 }
-            : { type: 'spring', stiffness: 260, damping: 14, delay: 0.6 }
+            : { type: 'spring', stiffness: 320, damping: 26, delay: 0.6 }
         }
       >
         VALIDÉ
@@ -153,18 +153,15 @@ export function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: reduceMotion ? 0 : 0.5, ease: DOXI_EASE }}
         >
-          <Badge variant="gold">CV · Checklist · Candidature</Badge>
+          <Badge variant="neutral">CV · Checklist · Candidature</Badge>
         </motion.div>
         <motion.h1
           initial={{ opacity: 0, y: reduceMotion ? 0 : 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: reduceMotion ? 0 : 0.5, delay: 0.05, ease: DOXI_EASE }}
-          className="mt-4 font-serif text-4xl leading-tight text-ink-900 md:text-5xl"
+          className="mt-4 font-serif text-4xl leading-tight tracking-tight text-ink-900 md:text-5xl"
         >
-          Ton dossier d’études à l’étranger,{' '}
-          <span className="bg-gradient-to-r from-ink-900 to-seal-gold bg-clip-text text-transparent">
-            sans stress
-          </span>
+          Ton dossier d’études à l’étranger, <em className="italic">sans stress</em>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: reduceMotion ? 0 : 16 }}

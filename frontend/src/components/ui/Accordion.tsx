@@ -54,14 +54,22 @@ export function Accordion({
               className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left text-sm font-medium text-ink-900"
             >
               {item.title}
-              <motion.span
+              <motion.svg
                 animate={{ rotate: isOpen ? 180 : 0 }}
                 transition={{ duration: reduceMotion ? 0 : DURATION.fast }}
-                className="shrink-0 text-ink-900/50"
+                className="h-4 w-4 shrink-0 text-ink-900/50"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
                 aria-hidden="true"
               >
-                ▾
-              </motion.span>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.75}
+                  d="M6 9l6 6 6-6"
+                />
+              </motion.svg>
             </button>
             <AnimatePresence initial={false}>
               {isOpen && (

@@ -15,7 +15,7 @@ export function TrustBar() {
           {PROGRAMS.map((name) => (
             <Badge key={name} variant="neutral" className="gap-1.5">
               <svg
-                className="h-3 w-3 text-seal-gold"
+                className="h-3 w-3 text-success-600"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"

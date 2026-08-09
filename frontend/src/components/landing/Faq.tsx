@@ -1,5 +1,9 @@
+'use client';
+
+import { motion } from 'framer-motion';
 import { Accordion, type AccordionItemData } from '@/components/ui';
 import { Section } from './Section';
+import { useReducedMotion, DOXI_EASE } from '@/lib/motion';
 
 const ITEMS: AccordionItemData[] = [
   {
@@ -29,15 +33,23 @@ const ITEMS: AccordionItemData[] = [
 ];
 
 export function Faq() {
+  const reduceMotion = useReducedMotion();
+
   return (
     <Section id="faq" bg="paper-100">
       <p className="text-xs font-semibold tracking-wide text-seal-gold uppercase">
         Des réponses claires
       </p>
       <h2 className="mt-2 max-w-xl font-serif text-3xl text-ink-900">Questions fréquentes</h2>
-      <div className="mt-10 max-w-2xl">
+      <motion.div
+        initial={{ opacity: 0, y: reduceMotion ? 0 : 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-80px' }}
+        transition={{ duration: reduceMotion ? 0 : 0.4, ease: DOXI_EASE }}
+        className="mt-10 max-w-2xl"
+      >
         <Accordion items={ITEMS} />
-      </div>
+      </motion.div>
     </Section>
   );
 }

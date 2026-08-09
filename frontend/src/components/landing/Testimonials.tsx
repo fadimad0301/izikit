@@ -1,5 +1,9 @@
+'use client';
+
+import { motion } from 'framer-motion';
 import { Card } from '@/components/ui';
 import { Section } from './Section';
+import { useReducedMotion, DOXI_EASE } from '@/lib/motion';
 
 // PLACEHOLDER CONTENT — replace with real student testimonials once Doxi has
 // its first cohort of users. Do not present these as real quotes in
@@ -20,6 +24,8 @@ const TESTIMONIALS = [
 ];
 
 export function Testimonials() {
+  const reduceMotion = useReducedMotion();
+
   return (
     <Section>
       <p className="text-xs font-semibold tracking-wide text-seal-gold uppercase">
@@ -29,12 +35,20 @@ export function Testimonials() {
         Ils préparent leur dossier avec Doxi
       </h2>
       <div className="mt-10 grid gap-5 md:grid-cols-2">
-        {TESTIMONIALS.map((t) => (
-          <Card key={t.name} bordered>
-            <p className="font-serif text-lg text-ink-900 italic">“{t.quote}”</p>
-            <p className="mt-4 text-sm font-medium text-ink-900">{t.name}</p>
-            <p className="text-xs text-charcoal-900/50">{t.context}</p>
-          </Card>
+        {TESTIMONIALS.map((t, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: reduceMotion ? 0 : 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: reduceMotion ? 0 : 0.4, delay: i * 0.08, ease: DOXI_EASE }}
+          >
+            <Card bordered className="h-full">
+              <p className="font-serif text-lg text-ink-900 italic">“{t.quote}”</p>
+              <p className="mt-4 text-sm font-medium text-ink-900">{t.name}</p>
+              <p className="text-xs text-charcoal-900/50">{t.context}</p>
+            </Card>
+          </motion.div>
         ))}
       </div>
     </Section>

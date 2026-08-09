@@ -13,7 +13,29 @@
   --font-serif: var(--font-newsreader), Georgia, 'Times New Roman', serif;
   --font-sans: var(--font-general-sans), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-ibm-plex-mono), ui-monospace, 'SFMono-Regular', monospace;
+
+  /* Elevation system — 4 levels, all tinted ink-900, same light-from-above
+     direction (positive y, soft blur growing with level). Pick by role, not
+     by feel: 1 = resting card, 2 = hover/raised card, 3 = popover/dropdown,
+     4 = modal/dialog. Anything needing a shadow uses one of these four. */
+  --shadow-doxi-1: 0 1px 2px -1px rgb(27 36 64 / 0.06), 0 1px 1px 0 rgb(27 36 64 / 0.04);
+  --shadow-doxi-2: 0 8px 16px -4px rgb(27 36 64 / 0.1), 0 2px 6px -1px rgb(27 36 64 / 0.06);
+  --shadow-doxi-3: 0 16px 32px -8px rgb(27 36 64 / 0.14), 0 4px 10px -2px rgb(27 36 64 / 0.08);
+  --shadow-doxi-4: 0 24px 56px -12px rgb(27 36 64 / 0.22), 0 8px 16px -4px rgb(27 36 64 / 0.1);
 }
+
+/* Typographic roles — pick by role, not by feel. Every heading/body/caption
+   in the app should map to one of these, not a one-off text-* + leading-*
+   combination chosen per screen.
+     Display   font-serif text-5xl md:text-6xl leading-[1.05] tracking-tight
+     H1        font-serif text-4xl md:text-5xl leading-tight tracking-tight
+     H2        font-serif text-3xl leading-snug tracking-tight
+     H3        font-sans text-base font-medium leading-snug
+     Body-lg   font-sans text-lg leading-relaxed
+     Body      font-sans text-sm leading-relaxed
+     Caption   font-sans text-xs leading-normal tracking-wide
+     Eyebrow   font-sans text-xs font-semibold uppercase tracking-wide
+     Mono      font-mono text-xs tracking-widest (statuses, codes, dates) */
 
 @layer base {
   body {

@@ -9,9 +9,9 @@ export function Card({ className, bordered = false, elevated = false, ...props }
   return (
     <div
       className={cn(
-        'rounded-2xl bg-white p-6',
+        'rounded-2xl bg-white p-6 transition-shadow duration-200',
         bordered && 'border border-ink-900/10',
-        elevated && 'shadow-lg shadow-ink-900/5',
+        elevated ? 'shadow-doxi-3' : bordered && 'shadow-doxi-1 hover:shadow-doxi-2',
         className,
       )}
       {...props}

@@ -42,7 +42,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
       {open && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
           <motion.div
-            className="absolute inset-0 bg-ink-900/40"
+            className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm"
             onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -55,7 +55,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
             aria-modal="true"
             aria-label={title}
             className={cn(
-              'relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl',
+              'relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-doxi-4',
               className,
             )}
             initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : 8 }}
