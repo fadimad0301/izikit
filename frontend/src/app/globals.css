@@ -31,3 +31,17 @@
     scroll-behavior: auto !important;
   }
 }
+
+@media print {
+  [data-print-hide] {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+  #cv-print-area {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+}
