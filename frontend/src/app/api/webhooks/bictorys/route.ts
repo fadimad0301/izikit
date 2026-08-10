@@ -26,10 +26,19 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import 'server-only';
+import { z } from 'zod';
 import { createWebhookHandler } from '@/lib/server/webhook/handler';
 import { bictorysWebhookProvider } from '@/lib/server/webhook/bictorys';
 import { enqueueOutbox } from '@/lib/server/outbox';
 import { prisma } from '@/lib/server/prisma';
+
+// Doxi Phase 4 — recognized shape of Order.metadata for an Accompagnement
+// Simple purchase. Both fields optional: most Orders (e.g. future tiers,
+// other products) won't carry them, and that's the expected default case.
+const OrderMetadata = z.object({
+  tier: z.string().optional(),
+  procedureId: z.string().optional(),
+});
 
 export const POST = createWebhookHandler({
   prisma,
@@ -54,6 +63,31 @@ export const POST = createWebhookHandler({
         ...(paymentMethod !== null ? { paymentMethod } : {}),
       },
     });
+
+    // Doxi Phase 4 — grant checklist access for the Accompagnement Simple
+    // tier. Runs inside the same Serializable tx as the status update above
+    // so access is atomic with payment confirmation — never an outbox side
+    // effect. @@unique([userId, procedureId]) makes this upsert idempotent
+    // across webhook replays.
+    if (order.userId) {
+      const meta = OrderMetadata.safeParse(order.metadata);
+      if (meta.success && meta.data.tier === 'SIMPLE' && meta.data.procedureId) {
+        await tx.procedureAccess.upsert({
+          where: {
+            userId_procedureId: {
+              userId: order.userId,
+              procedureId: meta.data.procedureId,
+            },
+          },
+          create: {
+            userId: order.userId,
+            procedureId: meta.data.procedureId,
+            orderId: order.id,
+          },
+          update: {},
+        });
+      }
+    }
 
     // Outbox emits stay inside the factory's Serializable tx so the rows
     // commit atomically with the status change. The drain cron picks them up

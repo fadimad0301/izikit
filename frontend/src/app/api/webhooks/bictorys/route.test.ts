@@ -7,12 +7,14 @@ const update = vi.fn();
 const orderFindFirst = vi.fn();
 const orderUpdate = vi.fn();
 const outboxCreate = vi.fn();
+const procedureAccessUpsert = vi.fn();
 
 const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>, _opts?: unknown) =>
   fn({
     webhookLog: { findUnique, create, update },
     order: { findFirst: orderFindFirst, update: orderUpdate },
     outboxEvent: { create: outboxCreate },
+    procedureAccess: { upsert: procedureAccessUpsert },
   }),
 );
 
@@ -31,6 +33,7 @@ beforeEach(() => {
   orderFindFirst.mockReset();
   orderUpdate.mockReset();
   outboxCreate.mockReset();
+  procedureAccessUpsert.mockReset();
 });
 
 afterEach(() => {
@@ -115,5 +118,44 @@ describe('POST /api/webhooks/bictorys', () => {
     const mod = (await import('./route')) as { runtime?: string; dynamic?: string };
     expect(mod.runtime).toBe('nodejs');
     expect(mod.dynamic).toBe('force-dynamic');
+  });
+
+  it('onPaid creates ProcedureAccess for a SIMPLE-tier order with procedureId (Phase 4)', async () => {
+    findUnique.mockResolvedValueOnce(null);
+    orderFindFirst.mockResolvedValueOnce({
+      id: 'o1',
+      userId: 'u1',
+      customerEmail: 'a@b.com',
+      amount: 5000,
+      currency: 'XOF',
+      metadata: { tier: 'SIMPLE', procedureId: 'proc_1' },
+    });
+    outboxCreate.mockResolvedValue({ id: 'ob1' });
+    procedureAccessUpsert.mockResolvedValue({ id: 'pa1' });
+    const { POST } = await import('./route');
+    const { req } = bictorysFixtureRequest({ status: 'succeeded' });
+    await POST(req);
+    expect(procedureAccessUpsert).toHaveBeenCalledWith({
+      where: { userId_procedureId: { userId: 'u1', procedureId: 'proc_1' } },
+      create: { userId: 'u1', procedureId: 'proc_1', orderId: 'o1' },
+      update: {},
+    });
+  });
+
+  it('onPaid does not create ProcedureAccess when metadata has no tier/procedureId (Phase 4)', async () => {
+    findUnique.mockResolvedValueOnce(null);
+    orderFindFirst.mockResolvedValueOnce({
+      id: 'o2',
+      userId: 'u1',
+      customerEmail: 'a@b.com',
+      amount: 5000,
+      currency: 'XOF',
+      metadata: null,
+    });
+    outboxCreate.mockResolvedValue({ id: 'ob2' });
+    const { POST } = await import('./route');
+    const { req } = bictorysFixtureRequest({ status: 'succeeded' });
+    await POST(req);
+    expect(procedureAccessUpsert).not.toHaveBeenCalled();
   });
 });
