@@ -7,10 +7,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { ProgressBar } from '@/components/ui';
+import { useReducedMotion, DOXI_EASE } from '@/lib/motion';
 import {
   IdentityStepForm,
   EducationStepForm,
@@ -55,12 +56,45 @@ function apiErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+// Dots read better than a continuous fill for a short, linear wizard — each
+// step is a discrete commitment, not a fractional quantity. The visible
+// label text stays a plain paragraph right above (same copy the old
+// ProgressBar rendered); this element carries the equivalent progressbar
+// semantics for assistive tech.
+function StepIndicator({ total, current }: { total: number; current: number }) {
+  return (
+    <div
+      role="progressbar"
+      aria-valuenow={current + 1}
+      aria-valuemin={1}
+      aria-valuemax={total}
+      className="mt-3 flex items-center gap-1.5"
+    >
+      {Array.from({ length: total }, (_, i) => (
+        <div
+          key={i}
+          aria-hidden="true"
+          className={
+            i < current
+              ? 'h-1.5 flex-1 rounded-full bg-ink-900'
+              : i === current
+                ? 'h-1.5 flex-1 rounded-full bg-seal-gold'
+                : 'h-1.5 flex-1 rounded-full bg-ink-900/12'
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function CvBuilderPage() {
   const user = useUser();
   const { toast } = useToast();
+  const reduceMotion = useReducedMotion();
   const [answers, setAnswers] = useState<CvAnswers>({});
   const [generatedCv, setGeneratedCv] = useState<GeneratedCv | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
+  const [direction, setDirection] = useState<1 | -1>(1);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [view, setView] = useState<'wizard' | 'preview'>('wizard');
@@ -139,8 +173,14 @@ export default function CvBuilderPage() {
     if (isLastStep) {
       await handleGenerate();
     } else {
+      setDirection(1);
       setStepIndex((i) => i + 1);
     }
+  }
+
+  function goBack() {
+    setDirection(-1);
+    setStepIndex((i) => Math.max(0, i - 1));
   }
 
   return (
@@ -148,59 +188,67 @@ export default function CvBuilderPage() {
       <div>
         <p className="text-xs font-semibold tracking-wide text-seal-gold uppercase">CV Builder</p>
         <h1 className="mt-2 font-serif text-3xl text-ink-900">Construis ton CV</h1>
-        <ProgressBar
-          className="mt-4"
-          value={stepIndex + 1}
-          max={WIZARD_STEPS.length}
-          label={`Étape ${stepIndex + 1}/${WIZARD_STEPS.length} — ${STEP_LABELS[currentStep]}`}
-        />
+        <p className="mt-4 text-sm font-medium text-ink-900/70">
+          Étape {stepIndex + 1}/{WIZARD_STEPS.length} — {STEP_LABELS[currentStep]}
+        </p>
+        <StepIndicator total={WIZARD_STEPS.length} current={stepIndex} />
       </div>
 
       {stepIndex > 0 && (
         <button
           type="button"
-          onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+          onClick={goBack}
           className="self-start text-sm text-ink-900/70 underline underline-offset-2"
         >
           ← Étape précédente
         </button>
       )}
 
-      {currentStep === 'identity' && (
-        <IdentityStepForm
-          defaultValues={answers.identity ?? {}}
-          onSubmit={handleStepSubmit}
-          submitLabel="Suivant"
-        />
-      )}
-      {currentStep === 'education' && (
-        <EducationStepForm
-          defaultValues={answers.education ?? {}}
-          onSubmit={handleStepSubmit}
-          submitLabel="Suivant"
-        />
-      )}
-      {currentStep === 'experience' && (
-        <ExperienceStepForm
-          defaultValues={answers.experience ?? {}}
-          onSubmit={handleStepSubmit}
-          submitLabel="Suivant"
-        />
-      )}
-      {currentStep === 'skills' && (
-        <SkillsStepForm
-          defaultValues={answers.skills ?? {}}
-          onSubmit={handleStepSubmit}
-          submitLabel="Suivant"
-        />
-      )}
-      {currentStep === 'objective' && (
-        <ObjectiveStepForm
-          defaultValues={answers.objective ?? {}}
-          onSubmit={handleStepSubmit}
-          submitLabel={generating ? 'Génération…' : 'Générer mon CV'}
-        />
-      )}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={currentStep}
+          initial={{ opacity: 0, x: reduceMotion ? 0 : direction * 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: reduceMotion ? 0 : -direction * 20 }}
+          transition={{ duration: reduceMotion ? 0 : 0.3, ease: DOXI_EASE }}
+        >
+          {currentStep === 'identity' && (
+            <IdentityStepForm
+              defaultValues={answers.identity ?? {}}
+              onSubmit={handleStepSubmit}
+              submitLabel="Suivant"
+            />
+          )}
+          {currentStep === 'education' && (
+            <EducationStepForm
+              defaultValues={answers.education ?? {}}
+              onSubmit={handleStepSubmit}
+              submitLabel="Suivant"
+            />
+          )}
+          {currentStep === 'experience' && (
+            <ExperienceStepForm
+              defaultValues={answers.experience ?? {}}
+              onSubmit={handleStepSubmit}
+              submitLabel="Suivant"
+            />
+          )}
+          {currentStep === 'skills' && (
+            <SkillsStepForm
+              defaultValues={answers.skills ?? {}}
+              onSubmit={handleStepSubmit}
+              submitLabel="Suivant"
+            />
+          )}
+          {currentStep === 'objective' && (
+            <ObjectiveStepForm
+              defaultValues={answers.objective ?? {}}
+              onSubmit={handleStepSubmit}
+              submitLabel={generating ? 'Génération…' : 'Générer mon CV'}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
     </main>
   );
 }

@@ -7,3 +7,4 @@ export { Modal } from './Modal';
 export { Accordion } from './Accordion';
 export type { AccordionItemData } from './Accordion';
 export { ProgressBar } from './ProgressBar';
+export { Stamp } from './Stamp';

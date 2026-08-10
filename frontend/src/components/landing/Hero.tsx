@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Button, Badge } from '@/components/ui';
+import { Button, Badge, Stamp } from '@/components/ui';
 import { useReducedMotion, DOXI_EASE } from '@/lib/motion';
 
 // Real, derivable facts (not marketing metrics) — kept in sync with the
@@ -126,18 +126,9 @@ function HeroIllustration() {
         <div className="h-2 w-full rounded-full bg-ink-900/8" />
         <div className="h-2 w-3/4 rounded-full bg-ink-900/8" />
       </motion.div>
-      <motion.div
-        className="absolute right-4 bottom-6 flex h-16 w-16 items-center justify-center rounded-full border-4 border-seal-gold font-serif text-xs font-semibold text-seal-gold"
-        initial={{ opacity: 0, scale: reduceMotion ? 1 : 1.4, rotate: reduceMotion ? -18 : -24 }}
-        animate={{ opacity: 1, scale: 1, rotate: -18 }}
-        transition={
-          reduceMotion
-            ? { duration: 0 }
-            : { type: 'spring', stiffness: 320, damping: 26, delay: 0.6 }
-        }
-      >
+      <Stamp size={64} className="absolute right-4 bottom-6 font-serif text-xs font-semibold">
         VALIDÉ
-      </motion.div>
+      </Stamp>
     </div>
   );
 }
