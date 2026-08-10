@@ -25,7 +25,7 @@ const TIERS = [
     features: [
       'Checklist des documents requis',
       'Marche à suivre détaillée',
-      '1 document généré au choix',
+      'Accès immédiat après paiement',
     ],
     cta: 'Choisir l’offre Simple',
     href: '/signup',
