@@ -5,8 +5,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { Card, Button } from '@/components/ui';
 
@@ -30,6 +29,7 @@ const MAX_POLLS = 10;
 
 export default function OrderSuccessPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const orderId = params.id;
 
   const [order, setOrder] = useState<OrderStatus | null>(null);
@@ -69,11 +69,21 @@ export default function OrderSuccessPage() {
           <p className="text-sm text-charcoal-900/60">Vérification du paiement…</p>
         )}
 
-        {!error && order?.status === 'PENDING' && (
+        {!error && order?.status === 'PENDING' && pollCount < MAX_POLLS && (
           <>
             <h1 className="font-serif text-2xl text-ink-900">Confirmation en cours</h1>
             <p className="mt-2 text-sm text-charcoal-900/70">
               Ton paiement est en cours de traitement. Cette page se mettra à jour automatiquement.
+            </p>
+          </>
+        )}
+
+        {!error && order?.status === 'PENDING' && pollCount >= MAX_POLLS && (
+          <>
+            <h1 className="font-serif text-2xl text-ink-900">Confirmation en attente</h1>
+            <p className="mt-2 text-sm text-charcoal-900/70">
+              La confirmation prend plus de temps que prévu. Rafraîchis cette page dans quelques
+              instants pour réessayer.
             </p>
           </>
         )}
@@ -83,11 +93,13 @@ export default function OrderSuccessPage() {
             <h1 className="font-serif text-2xl text-ink-900">Paiement confirmé</h1>
             <p className="mt-2 text-sm text-charcoal-900/70">Merci — ta checklist est prête.</p>
             {procedureSlug && (
-              <Link href={`/procedures/${procedureSlug}`} className="mt-6 block">
-                <Button variant="primary" className="w-full">
-                  Voir la checklist
-                </Button>
-              </Link>
+              <Button
+                variant="primary"
+                className="mt-6 w-full"
+                onClick={() => router.push(`/procedures/${procedureSlug}`)}
+              >
+                Voir la checklist
+              </Button>
             )}
           </>
         )}
@@ -99,11 +111,13 @@ export default function OrderSuccessPage() {
               Ce paiement n’a pas abouti. Réessaie depuis la page de la procédure.
             </p>
             {procedureSlug && (
-              <Link href={`/procedures/${procedureSlug}`} className="mt-6 block">
-                <Button variant="secondary" className="w-full">
-                  Retour à la procédure
-                </Button>
-              </Link>
+              <Button
+                variant="secondary"
+                className="mt-6 w-full"
+                onClick={() => router.push(`/procedures/${procedureSlug}`)}
+              >
+                Retour à la procédure
+              </Button>
             )}
           </>
         )}

@@ -3,8 +3,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { Card, Button } from '@/components/ui';
 
@@ -22,6 +21,7 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 
 export default function OrderFailedPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const orderId = params.id;
   const [procedureSlug, setProcedureSlug] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,14 +49,15 @@ export default function OrderFailedPage() {
           la fin.
         </p>
         {error && <p className="mt-2 text-xs text-error-600">{error}</p>}
-        <Link
-          href={procedureSlug ? `/procedures/${procedureSlug}` : '/procedures'}
-          className="mt-6 block"
+        <Button
+          variant="secondary"
+          className="mt-6 w-full"
+          onClick={() =>
+            router.push(procedureSlug ? `/procedures/${procedureSlug}` : '/procedures')
+          }
         >
-          <Button variant="secondary" className="w-full">
-            Réessayer
-          </Button>
-        </Link>
+          Réessayer
+        </Button>
       </Card>
     </main>
   );

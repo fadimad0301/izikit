@@ -28,7 +28,7 @@ const TIERS = [
       'Accès immédiat après paiement',
     ],
     cta: 'Choisir l’offre Simple',
-    href: '/signup',
+    href: '/procedures',
     featured: false,
   },
   {

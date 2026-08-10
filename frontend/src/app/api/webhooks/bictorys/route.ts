@@ -31,6 +31,7 @@ import { createWebhookHandler } from '@/lib/server/webhook/handler';
 import { bictorysWebhookProvider } from '@/lib/server/webhook/bictorys';
 import { enqueueOutbox } from '@/lib/server/outbox';
 import { prisma } from '@/lib/server/prisma';
+import { log } from '@/lib/server/observability/log';
 
 // Doxi Phase 4 — recognized shape of Order.metadata for an Accompagnement
 // Simple purchase. Both fields optional: most Orders (e.g. future tiers,
@@ -72,20 +73,40 @@ export const POST = createWebhookHandler({
     if (order.userId) {
       const meta = OrderMetadata.safeParse(order.metadata);
       if (meta.success && meta.data.tier === 'SIMPLE' && meta.data.procedureId) {
-        await tx.procedureAccess.upsert({
-          where: {
-            userId_procedureId: {
+        const procedure = await tx.procedure.findUnique({
+          where: { id: meta.data.procedureId },
+          select: { id: true, priceFcfa: true },
+        });
+
+        if (!procedure) {
+          log.warn('procedure access not granted: unknown procedureId', {
+            orderId: order.id,
+            procedureId: meta.data.procedureId,
+          });
+        } else if (order.currency !== 'XOF' || order.amount < procedure.priceFcfa) {
+          log.warn('procedure access not granted: payment does not cover price', {
+            orderId: order.id,
+            procedureId: procedure.id,
+            amount: order.amount,
+            currency: order.currency,
+            priceFcfa: procedure.priceFcfa,
+          });
+        } else {
+          await tx.procedureAccess.upsert({
+            where: {
+              userId_procedureId: {
+                userId: order.userId,
+                procedureId: meta.data.procedureId,
+              },
+            },
+            create: {
               userId: order.userId,
               procedureId: meta.data.procedureId,
+              orderId: order.id,
             },
-          },
-          create: {
-            userId: order.userId,
-            procedureId: meta.data.procedureId,
-            orderId: order.id,
-          },
-          update: {},
-        });
+            update: {},
+          });
+        }
       }
     }
 
