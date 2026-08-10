@@ -43,11 +43,12 @@ model User {
   oauthAccounts     OAuthAccount[]
   adminActions      AdminAction[]
   cvProfile         CvProfile?
+  procedureAccess   ProcedureAccess[]
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
   // on their domain models.
-  ownedOrganizations Organization[]      @relation("OrgOwner")
+  ownedOrganizations Organization[]       @relation("OrgOwner")
   memberships        OrganizationMember[] @relation("OrgMembership")
 
   @@index([email])
@@ -96,14 +97,14 @@ model AdminAction {
 // used as a stable URL segment.
 // ───────────────────────────────────────────────────────────────────────
 model Organization {
-  id        String   @id @default(cuid())
-  slug      String   @unique
+  id        String               @id @default(cuid())
+  slug      String               @unique
   name      String
   ownerId   String
-  owner     User     @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  owner     User                 @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   members   OrganizationMember[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
 
   @@index([ownerId])
 }
@@ -153,7 +154,7 @@ model VerificationCode {
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   code      String
-  type      String // EMAIL_VERIFY | PASSWORD_RESET
+  type      String // PASSWORD_RESET (EMAIL_VERIFY was removed — no email-verification step)
   expiresAt DateTime
   usedAt    DateTime?
   attempts  Int       @default(0)
@@ -298,27 +299,31 @@ model WebhookLog {
 // at the call site — the schema is currency-agnostic.
 // ───────────────────────────────────────────────────────────────────────
 model Order {
-  id              String    @id @default(cuid())
-  userId          String? // nullable — guest checkout supported
-  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  amount          Int // gross amount, smallest unit
-  currency        String    @default("XOF") // ISO 4217
-  status          String    @default("PENDING") // PENDING | PAID | EXPIRED | FAILED | REFUNDED
-  customerEmail   String?
-  customerPhone   String?
-  customerName    String?
-  metadata        Json? // app-specific fields
+  id            String  @id @default(cuid())
+  userId        String? // nullable — guest checkout supported
+  user          User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  amount        Int // gross amount, smallest unit
+  currency      String  @default("XOF") // ISO 4217
+  status        String  @default("PENDING") // PENDING | PAID | EXPIRED | FAILED | REFUNDED
+  customerEmail String?
+  customerPhone String?
+  customerName  String?
+  metadata      Json? // app-specific fields
 
   // Stripe-grade idempotency. Required header on POST /api/orders; replay
   // with same value returns the original Order row instead of double-charging.
   // Nullable so existing rows pre-migration don't break the @unique constraint.
-  idempotencyKey  String?   @unique
+  idempotencyKey String? @unique
 
   // Provider reference
   provider         String // e.g. "bictorys"
   providerChargeId String? @unique
   paymentUrl       String? // checkout/redirect URL returned by provider
   paymentMethod    String? // WAVE | ORANGE_MONEY | FREE_MONEY (set on PAID by webhook)
+
+  // Doxi Phase 4 — set when this Order paid for Accompagnement Simple
+  // access to a Procedure's checklist (Order.metadata.tier === 'SIMPLE').
+  procedureAccess ProcedureAccess?
 
   // Optional commission (for marketplace-style apps)
   commissionAmount Int?
@@ -335,13 +340,55 @@ model Order {
   @@index([provider, providerChargeId])
 }
 
-model Withdrawal {
-  id          String   @id @default(cuid())
+// Doxi Phase 4 — Accompagnement Simple: procedure catalog + checklist.
+// docs/superpowers/specs/2026-08-09-procedure-checklist-payment-design.md
+// Static reference content managed via `pnpm seed:procedures` — no admin
+// CRUD surface in this phase.
+model Procedure {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String // "Campus France", "Chevening", "Bourse Canada"...
+  country   String
+  field     String? // domaine si pertinent (ex. "Master", "Ingénierie")
+  tagline   String // une phrase d'accroche pour la carte de sélection
+  checklist Json // [{ title: string; description?: string }] — révélé après achat
+  priceFcfa Int      @default(5000)
+  createdAt DateTime @default(now())
+
+  access ProcedureAccess[]
+
+  @@index([slug])
+}
+
+// Grants a user's access to one Procedure's checklist. Created by the
+// Bictorys webhook's onPaid handler inside the same Serializable tx as the
+// Order status update (see app/api/webhooks/bictorys/route.ts) — never via
+// the outbox, so access is atomic with payment confirmation.
+//
+// userId is non-nullable (unlike Order.userId, which stays nullable for a
+// future generic guest-checkout use case) because POST /api/orders already
+// requires auth — no guest checkout exists for this flow.
+model ProcedureAccess {
+  id          String    @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  procedureId String
+  procedure   Procedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+  orderId     String    @unique
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  grantedAt   DateTime  @default(now())
+
+  @@unique([userId, procedureId])
+  @@index([userId])
+}
+
+model Withdrawal {
+  id          String @id @default(cuid())
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Restrict)
   amount      Int // requested amount, smallest unit
-  currency    String   @default("XOF")
-  status      String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED | CANCELLED
+  currency    String @default("XOF")
+  status      String @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED | CANCELLED
   destination Json // { method: "WAVE" | "ORANGE_MONEY" | ..., phone: "+221...", accountName?: "..." }
 
   // Provider reference
