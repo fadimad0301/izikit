@@ -40,7 +40,7 @@ const PROCEDURES: ProcedureSeed[] = [
       },
       {
         title: 'Relevés de notes des 2 ou 3 dernières années',
-        description: "Traduits en français si l'original est dans une autre langue.",
+        description: 'Traduits en français si l’original est dans une autre langue.',
       },
       { title: 'Diplômes obtenus (ou attestation de scolarité en cours)' },
       { title: 'Lettre de motivation', description: 'Adaptée à chaque formation demandée.' },
@@ -49,7 +49,7 @@ const PROCEDURES: ProcedureSeed[] = [
         title: 'Justificatif de ressources financières',
         description: 'Preuve de capacité à financer au moins la première année.',
       },
-      { title: "Certificat de français (TCF/TEF) si la formation l'exige" },
+      { title: 'Certificat de français (TCF/TEF) si la formation l’exige' },
     ],
   },
   {
@@ -57,14 +57,14 @@ const PROCEDURES: ProcedureSeed[] = [
     name: 'Chevening',
     country: 'Royaume-Uni',
     field: 'Master',
-    tagline: "Bourse britannique entièrement financée pour un Master d'un an.",
+    tagline: 'Bourse britannique entièrement financée pour un Master d’un an.',
     priceFcfa: 5000,
     checklist: [
       { title: 'Passeport en cours de validité' },
       {
         title: '3 lettres de recommandation',
         description:
-          "D'employeurs ou d'enseignants, soumises directement en ligne par les référents.",
+          'D’employeurs ou d’enseignants, soumises directement en ligne par les référents.',
       },
       {
         title: 'Essais de candidature Chevening',
@@ -73,9 +73,9 @@ const PROCEDURES: ProcedureSeed[] = [
       },
       { title: 'CV à jour' },
       { title: 'Diplômes et relevés de notes' },
-      { title: "Preuve de 2 ans d'expérience professionnelle minimum" },
+      { title: 'Preuve de 2 ans d’expérience professionnelle minimum' },
       {
-        title: "3 offres d'admission inconditionnelles à des universités britanniques éligibles",
+        title: '3 offres d’admission inconditionnelles à des universités britanniques éligibles',
         description:
           'À obtenir avant la date limite Chevening, séparément de la candidature à la bourse.',
       },
@@ -85,11 +85,11 @@ const PROCEDURES: ProcedureSeed[] = [
     slug: 'bourses-canada',
     name: 'Bourses Canada',
     country: 'Canada',
-    tagline: "Programmes de bourses d'études supérieures pour étudiants internationaux.",
+    tagline: 'Programmes de bourses d’études supérieures pour étudiants internationaux.',
     priceFcfa: 5000,
     checklist: [
       { title: 'Passeport en cours de validité' },
-      { title: "Lettre d'admission ou de pré-admission d'un établissement canadien reconnu" },
+      { title: 'Lettre d’admission ou de pré-admission d’un établissement canadien reconnu' },
       {
         title: 'Relevés de notes officiels',
         description: 'Traduits en français ou en anglais.',
@@ -98,10 +98,10 @@ const PROCEDURES: ProcedureSeed[] = [
       { title: '2 à 3 lettres de recommandation académiques' },
       {
         title: 'Preuve de compétence linguistique (IELTS/TEF)',
-        description: "Selon la langue d'enseignement du programme visé.",
+        description: 'Selon la langue d’enseignement du programme visé.',
       },
       {
-        title: "Certificat d'acceptation du Québec (CAQ) ou preuve de fonds",
+        title: 'Certificat d’acceptation du Québec (CAQ) ou preuve de fonds',
         description: 'Selon la province et le type de bourse.',
       },
     ],
@@ -110,18 +110,18 @@ const PROCEDURES: ProcedureSeed[] = [
     slug: 'amci-maroc',
     name: 'AMCI Maroc',
     country: 'Maroc',
-    tagline: "Bourses de l'Agence Marocaine de Coopération Internationale.",
+    tagline: 'Bourses de l’Agence Marocaine de Coopération Internationale.',
     priceFcfa: 5000,
     checklist: [
       { title: 'Passeport en cours de validité' },
       { title: 'Copie légalisée du baccalauréat ou du dernier diplôme obtenu' },
       { title: 'Relevés de notes légalisés des 2 dernières années' },
-      { title: "Certificat médical d'aptitude", description: 'Délivré par un médecin agréé.' },
-      { title: "Extrait d'acte de naissance" },
-      { title: "Photos d'identité récentes" },
+      { title: 'Certificat médical d’aptitude', description: 'Délivré par un médecin agréé.' },
+      { title: 'Extrait d’acte de naissance' },
+      { title: 'Photos d’identité récentes' },
       {
         title: 'Dossier de candidature AMCI complété',
-        description: "Déposé auprès de l'ambassade du Maroc ou du service culturel compétent.",
+        description: 'Déposé auprès de l’ambassade du Maroc ou du service culturel compétent.',
       },
     ],
   },
@@ -140,10 +140,10 @@ const PROCEDURES: ProcedureSeed[] = [
       { title: 'Lettre de motivation' },
       {
         title: 'Lettres de recommandation',
-        description: "Nombre variable selon le niveau d'études visé.",
+        description: 'Nombre variable selon le niveau d’études visé.',
       },
-      { title: "Certificat médical attestant l'absence de maladie contagieuse" },
-      { title: "Photos d'identité récentes" },
+      { title: 'Certificat médical attestant l’absence de maladie contagieuse' },
+      { title: 'Photos d’identité récentes' },
       { title: 'Candidature en ligne complétée sur le portail Türkiye Scholarships' },
     ],
   },
