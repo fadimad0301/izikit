@@ -154,7 +154,7 @@ model VerificationCode {
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   code      String
-  type      String // PASSWORD_RESET (EMAIL_VERIFY was removed — no email-verification step)
+  type      String // EMAIL_VERIFY | PASSWORD_RESET
   expiresAt DateTime
   usedAt    DateTime?
   attempts  Int       @default(0)
