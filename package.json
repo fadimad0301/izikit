@@ -23,6 +23,7 @@
     "db:studio": "pnpm --filter frontend run db:studio",
     "db:make-superadmin": "pnpm --filter frontend run db:make-superadmin",
     "seed:dev": "pnpm --filter frontend run seed:dev",
+    "seed:procedures": "pnpm --filter frontend run seed:procedures",
     "smoke:auth": "pnpm --filter frontend run smoke:auth",
     "prepare": "husky"
   },
