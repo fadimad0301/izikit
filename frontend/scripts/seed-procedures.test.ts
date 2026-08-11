@@ -43,6 +43,23 @@ describe('scripts/seed-procedures', () => {
     }
   });
 
+  it('gives every checklist item a non-empty, unique-within-procedure id', async () => {
+    prismaMock.procedure.upsert.mockResolvedValue({
+      slug: 'campus-france',
+      name: 'Campus France',
+    } as never);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await main([], { prisma: prismaMock });
+
+    for (const call of prismaMock.procedure.upsert.mock.calls) {
+      const createData = call[0]?.create as { checklist: { id: string }[] };
+      const ids = createData.checklist.map((item) => item.id);
+      expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+  });
+
   it('is idempotent — running twice performs the same 5 upserts both times', async () => {
     prismaMock.procedure.upsert.mockResolvedValue({
       slug: 'campus-france',
