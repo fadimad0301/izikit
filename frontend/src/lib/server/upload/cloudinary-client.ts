@@ -119,6 +119,74 @@ export async function uploadBuffer(
 }
 
 /**
+ * Upload a buffer with Cloudinary's `authenticated` delivery type — the
+ * asset is NOT reachable via the plain public `/upload/` URL path at all.
+ * The only way to read it back is `getSignedDeliveryUrl()` below. Used for
+ * procedure documents (passport scans, transcripts) — never for the public
+ * `/api/upload` route, which keeps using `uploadBuffer()` unchanged.
+ *
+ * `overwrite: true` + a deterministic `publicId` (built by the caller as
+ * `procedures/{userId}/{procedureId}/{checklistItemId}`) means a re-upload
+ * for the same checklist item replaces the same Cloudinary asset in place —
+ * no orphaned assets, no explicit delete step.
+ */
+export async function uploadAuthenticatedBuffer(
+  publicId: string,
+  body: Buffer,
+  contentType: string,
+): Promise<UploadResult & { resourceType: string }> {
+  configureOnce();
+
+  const options: UploadApiOptions = {
+    public_id: publicId,
+    resource_type: 'auto',
+    type: 'authenticated',
+    overwrite: true,
+  };
+  if (_preset) options.upload_preset = _preset;
+  if (contentType) options.metadata = `mime=${contentType}`;
+
+  const res = await new Promise<UploadApiResponse>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(options, (err, response) => {
+      if (err) return reject(err);
+      if (!response) return reject(new Error('Cloudinary upload returned no response'));
+      resolve(response);
+    });
+    stream.end(body);
+  });
+
+  return {
+    publicId: res.public_id,
+    secureUrl: res.secure_url,
+    bytes: typeof res.bytes === 'number' ? res.bytes : body.length,
+    resourceType: res.resource_type,
+  };
+}
+
+/**
+ * Mint a short-lived, signed download URL for an `authenticated`-type
+ * asset. Cloudinary's `private_download_url` genuinely enforces
+ * `expires_at` server-side on its `/download` endpoint (unlike a plain
+ * `sign_url: true` delivery URL, which has no built-in expiry) — this is
+ * the mechanism, not a cosmetic wrapper. Never persist the result; callers
+ * mint a fresh one on every request (see
+ * app/api/procedures/[slug]/documents/[itemId]/url/route.ts).
+ */
+export function getSignedDeliveryUrl(
+  publicId: string,
+  resourceType: string,
+  expiresAtUnixSeconds: number,
+): string {
+  configureOnce();
+  return cloudinary.utils.private_download_url(publicId, '', {
+    resource_type: resourceType as 'image' | 'video' | 'raw',
+    type: 'authenticated',
+    expires_at: expiresAtUnixSeconds,
+    attachment: false,
+  });
+}
+
+/**
  * Test-only escape hatch — clears the cached configuration flag so a test can
  * mutate `process.env.CLOUDINARY_*` and re-trigger lazy init. Never call this
  * from application code.
