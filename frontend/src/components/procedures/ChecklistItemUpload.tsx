@@ -6,7 +6,7 @@
 // minimal CSRF-token-read logic locally rather than modifying it.
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { Button, Badge } from '@/components/ui';
@@ -47,6 +47,7 @@ export function ChecklistItemUpload({ slug, item, onUploaded }: ChecklistItemUpl
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
   const [viewing, setViewing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -117,14 +118,12 @@ export function ChecklistItemUpload({ slug, item, onUploaded }: ChecklistItemUpl
             loading={uploading}
             onClick={(e) => {
               e.preventDefault();
-              (
-                e.currentTarget.parentElement?.querySelector('input[type=file]') as HTMLInputElement
-              )?.click();
+              fileInputRef.current?.click();
             }}
           >
             {item.uploaded ? 'Remplacer' : 'Envoyer'}
           </Button>
-          <input type="file" className="hidden" onChange={handleFileChange} />
+          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
         </label>
       </div>
     </div>
