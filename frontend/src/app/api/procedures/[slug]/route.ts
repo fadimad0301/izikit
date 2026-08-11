@@ -1,7 +1,8 @@
-// Doxi Phase 4 — GET /api/procedures/[slug]. optionalAuth so both guests
+// Doxi Phase 4/5 — GET /api/procedures/[slug]. optionalAuth so both guests
 // and authenticated callers can view a procedure's name/tagline/price;
 // `checklist` (the content being sold) is only included when the caller
-// holds a ProcedureAccess row for it.
+// holds a ProcedureAccess row for it. Phase 5 adds `tier`, the Complet/
+// upgrade prices, and per-item upload status when tier is COMPLET.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -10,6 +11,12 @@ import type { Prisma } from '@prisma/client';
 import { optionalAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import type { ChecklistItem } from '@/lib/server/procedures/checklist';
+import {
+  PROCEDURE_SIMPLE_PRICE_FCFA,
+  PROCEDURE_COMPLET_PRICE_FCFA,
+  PROCEDURE_UPGRADE_PRICE_FCFA,
+} from '@/lib/server/procedures/pricing';
 
 const PROCEDURE_DETAIL_SELECT = {
   id: true,
@@ -18,9 +25,10 @@ const PROCEDURE_DETAIL_SELECT = {
   country: true,
   field: true,
   tagline: true,
-  priceFcfa: true,
   checklist: true,
 } satisfies Prisma.ProcedureSelect;
+
+type Tier = 'SIMPLE' | 'COMPLET';
 
 export async function GET(
   req: NextRequest,
@@ -42,21 +50,48 @@ export async function GET(
     }
 
     const auth = await optionalAuth(req.headers.get('authorization'));
-    let hasAccess = false;
+    let tier: Tier | null = null;
     if (auth) {
       const access = await prisma.procedureAccess.findUnique({
         where: { userId_procedureId: { userId: auth.user.sub, procedureId: procedure.id } },
-        select: { id: true },
+        select: { tier: true },
       });
-      hasAccess = access !== null;
+      tier = (access?.tier as Tier | undefined) ?? null;
+    }
+    const hasAccess = tier !== null;
+
+    let uploadedByItem = new Map<string, string>();
+    if (auth && tier === 'COMPLET') {
+      const docs = await prisma.procedureDocument.findMany({
+        where: { userId: auth.user.sub, procedureId: procedure.id },
+        select: { checklistItemId: true, filename: true },
+      });
+      uploadedByItem = new Map(docs.map((d) => [d.checklistItemId, d.filename]));
     }
 
     const { checklist, ...publicFields } = procedure;
+    const checklistItems = checklist as unknown as ChecklistItem[];
+    const checklistResponse = hasAccess
+      ? checklistItems.map((item) =>
+          tier === 'COMPLET'
+            ? {
+                ...item,
+                uploaded: uploadedByItem.has(item.id),
+                filename: uploadedByItem.get(item.id),
+              }
+            : item,
+        )
+      : undefined;
+
     return NextResponse.json(
       {
         ...publicFields,
+        priceFcfa: PROCEDURE_SIMPLE_PRICE_FCFA,
+        completPriceFcfa: PROCEDURE_COMPLET_PRICE_FCFA,
+        upgradePriceFcfa: PROCEDURE_UPGRADE_PRICE_FCFA,
         hasAccess,
-        ...(hasAccess ? { checklist } : {}),
+        tier,
+        ...(checklistResponse ? { checklist: checklistResponse } : {}),
       },
       { status: 200, headers: { 'x-request-id': reqCtx.requestId } },
     );

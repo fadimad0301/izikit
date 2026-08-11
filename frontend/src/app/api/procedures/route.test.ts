@@ -17,7 +17,6 @@ describe('GET /api/procedures', () => {
         country: 'France',
         field: null,
         tagline: 'Candidature aux universités françaises.',
-        priceFcfa: 5000,
       },
     ] as never);
 
@@ -39,7 +38,7 @@ describe('GET /api/procedures', () => {
 
     expect(prismaMock.procedure.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        select: expect.not.objectContaining({ checklist: true }),
+        select: expect.not.objectContaining({ checklist: true, priceFcfa: true }),
       }),
     );
   });

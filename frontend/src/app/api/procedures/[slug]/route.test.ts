@@ -26,8 +26,7 @@ const PROCEDURE_ROW = {
   country: 'France',
   field: null,
   tagline: 'Candidature aux universités françaises.',
-  priceFcfa: 5000,
-  checklist: [{ title: 'Passeport en cours de validité' }],
+  checklist: [{ id: 'passeport-valide', title: 'Passeport en cours de validité' }],
 };
 
 describe('GET /api/procedures/[slug]', () => {
@@ -63,14 +62,46 @@ describe('GET /api/procedures/[slug]', () => {
   it('includes checklist and hasAccess:true when the caller holds ProcedureAccess', async () => {
     prismaMock.procedure.findUnique.mockResolvedValue(PROCEDURE_ROW as never);
     mockOptionalAuth.mockResolvedValue({ user: { sub: 'user-1', email: 'me@example.com' } });
-    prismaMock.procedureAccess.findUnique.mockResolvedValue({ id: 'pa1' } as never);
+    prismaMock.procedureAccess.findUnique.mockResolvedValue({ tier: 'SIMPLE' } as never);
     const res = await GET(makeGet(), ctxFor('campus-france'));
     const body = await res.json();
     expect(body.hasAccess).toBe(true);
-    expect(body.checklist).toEqual([{ title: 'Passeport en cours de validité' }]);
+    expect(body.tier).toBe('SIMPLE');
+    expect(body.checklist).toEqual([
+      { id: 'passeport-valide', title: 'Passeport en cours de validité' },
+    ]);
     expect(prismaMock.procedureAccess.findUnique).toHaveBeenCalledWith({
       where: { userId_procedureId: { userId: 'user-1', procedureId: 'proc_1' } },
-      select: { id: true },
+      select: { tier: true },
     });
+  });
+
+  it('includes completPriceFcfa and upgradePriceFcfa in every response', async () => {
+    prismaMock.procedure.findUnique.mockResolvedValue(PROCEDURE_ROW as never);
+    const res = await GET(makeGet(), ctxFor('campus-france'));
+    const body = await res.json();
+    expect(body.completPriceFcfa).toBe(20000);
+    expect(body.upgradePriceFcfa).toBe(15000);
+    expect(body.priceFcfa).toBe(5000);
+  });
+
+  it('marks per-item upload status when tier is COMPLET', async () => {
+    prismaMock.procedure.findUnique.mockResolvedValue(PROCEDURE_ROW as never);
+    mockOptionalAuth.mockResolvedValue({ user: { sub: 'user-1', email: 'me@example.com' } });
+    prismaMock.procedureAccess.findUnique.mockResolvedValue({ tier: 'COMPLET' } as never);
+    prismaMock.procedureDocument.findMany.mockResolvedValue([
+      { checklistItemId: 'passeport-valide', filename: 'passeport.jpg' },
+    ] as never);
+    const res = await GET(makeGet(), ctxFor('campus-france'));
+    const body = await res.json();
+    expect(body.tier).toBe('COMPLET');
+    expect(body.checklist).toEqual([
+      {
+        id: 'passeport-valide',
+        title: 'Passeport en cours de validité',
+        uploaded: true,
+        filename: 'passeport.jpg',
+      },
+    ]);
   });
 });

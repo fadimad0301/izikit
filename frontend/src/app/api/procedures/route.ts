@@ -8,6 +8,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { PROCEDURE_SIMPLE_PRICE_FCFA } from '@/lib/server/procedures/pricing';
 
 const PROCEDURE_LIST_SELECT = {
   id: true,
@@ -16,7 +17,6 @@ const PROCEDURE_LIST_SELECT = {
   country: true,
   field: true,
   tagline: true,
-  priceFcfa: true,
 } satisfies Prisma.ProcedureSelect;
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -27,7 +27,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       orderBy: { createdAt: 'asc' },
     });
 
-    return NextResponse.json(procedures, {
+    const withPrice = procedures.map((p) => ({ ...p, priceFcfa: PROCEDURE_SIMPLE_PRICE_FCFA }));
+
+    return NextResponse.json(withPrice, {
       status: 200,
       headers: { 'x-request-id': ctx.requestId },
     });
