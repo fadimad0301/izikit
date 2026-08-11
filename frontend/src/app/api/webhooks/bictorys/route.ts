@@ -32,6 +32,11 @@ import { bictorysWebhookProvider } from '@/lib/server/webhook/bictorys';
 import { enqueueOutbox } from '@/lib/server/outbox';
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/server/observability/log';
+import {
+  PROCEDURE_SIMPLE_PRICE_FCFA,
+  PROCEDURE_COMPLET_PRICE_FCFA,
+  PROCEDURE_UPGRADE_PRICE_FCFA,
+} from '@/lib/server/procedures/pricing';
 
 // Doxi Phase 4 — recognized shape of Order.metadata for an Accompagnement
 // Simple purchase. Both fields optional: most Orders (e.g. future tiers,
@@ -72,10 +77,10 @@ export const POST = createWebhookHandler({
     // across webhook replays.
     if (order.userId) {
       const meta = OrderMetadata.safeParse(order.metadata);
-      if (meta.success && meta.data.tier === 'SIMPLE' && meta.data.procedureId) {
+      if (meta.success && meta.data.procedureId) {
         const procedure = await tx.procedure.findUnique({
           where: { id: meta.data.procedureId },
-          select: { id: true, priceFcfa: true },
+          select: { id: true },
         });
 
         if (!procedure) {
@@ -83,28 +88,66 @@ export const POST = createWebhookHandler({
             orderId: order.id,
             procedureId: meta.data.procedureId,
           });
-        } else if (order.currency !== 'XOF' || order.amount < procedure.priceFcfa) {
-          log.warn('procedure access not granted: payment does not cover price', {
-            orderId: order.id,
-            procedureId: procedure.id,
-            amount: order.amount,
-            currency: order.currency,
-            priceFcfa: procedure.priceFcfa,
-          });
-        } else {
-          await tx.procedureAccess.upsert({
-            where: {
-              userId_procedureId: {
-                userId: order.userId,
-                procedureId: meta.data.procedureId,
-              },
-            },
-            create: {
-              userId: order.userId,
-              procedureId: meta.data.procedureId,
+        } else if (meta.data.tier === 'SIMPLE') {
+          if (order.currency !== 'XOF' || order.amount < PROCEDURE_SIMPLE_PRICE_FCFA) {
+            log.warn('procedure access not granted: payment does not cover Simple price', {
               orderId: order.id,
+              procedureId: procedure.id,
+              amount: order.amount,
+              currency: order.currency,
+            });
+          } else {
+            await tx.procedureAccess.upsert({
+              where: {
+                userId_procedureId: { userId: order.userId, procedureId: procedure.id },
+              },
+              create: {
+                userId: order.userId,
+                procedureId: procedure.id,
+                orderId: order.id,
+                tier: 'SIMPLE',
+              },
+              update: {}, // never downgrades an existing COMPLET
+            });
+          }
+        } else if (meta.data.tier === 'COMPLET') {
+          const existingAccess = await tx.procedureAccess.findUnique({
+            where: {
+              userId_procedureId: { userId: order.userId, procedureId: procedure.id },
             },
-            update: {},
+            select: { tier: true },
+          });
+          const required =
+            existingAccess?.tier === 'SIMPLE'
+              ? PROCEDURE_UPGRADE_PRICE_FCFA
+              : PROCEDURE_COMPLET_PRICE_FCFA;
+
+          if (order.currency !== 'XOF' || order.amount < required) {
+            log.warn('procedure access not granted: payment does not cover Complet price', {
+              orderId: order.id,
+              procedureId: procedure.id,
+              amount: order.amount,
+              currency: order.currency,
+              required,
+            });
+          } else {
+            await tx.procedureAccess.upsert({
+              where: {
+                userId_procedureId: { userId: order.userId, procedureId: procedure.id },
+              },
+              create: {
+                userId: order.userId,
+                procedureId: procedure.id,
+                orderId: order.id,
+                tier: 'COMPLET',
+              },
+              update: { tier: 'COMPLET', orderId: order.id },
+            });
+          }
+        } else {
+          log.warn('procedure access not granted: unknown tier', {
+            orderId: order.id,
+            tier: meta.data.tier,
           });
         }
       }

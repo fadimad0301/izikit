@@ -9,13 +9,14 @@ const orderUpdate = vi.fn();
 const outboxCreate = vi.fn();
 const procedureAccessUpsert = vi.fn();
 const procedureFindUnique = vi.fn();
+const procedureAccessFindUnique = vi.fn();
 
 const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>, _opts?: unknown) =>
   fn({
     webhookLog: { findUnique, create, update },
     order: { findFirst: orderFindFirst, update: orderUpdate },
     outboxEvent: { create: outboxCreate },
-    procedureAccess: { upsert: procedureAccessUpsert },
+    procedureAccess: { upsert: procedureAccessUpsert, findUnique: procedureAccessFindUnique },
     procedure: { findUnique: procedureFindUnique },
   }),
 );
@@ -37,6 +38,7 @@ beforeEach(() => {
   outboxCreate.mockReset();
   procedureAccessUpsert.mockReset();
   procedureFindUnique.mockReset();
+  procedureAccessFindUnique.mockReset();
 });
 
 afterEach(() => {
@@ -134,14 +136,14 @@ describe('POST /api/webhooks/bictorys', () => {
       metadata: { tier: 'SIMPLE', procedureId: 'proc_1' },
     });
     outboxCreate.mockResolvedValue({ id: 'ob1' });
-    procedureFindUnique.mockResolvedValueOnce({ id: 'proc_1', priceFcfa: 5000 });
+    procedureFindUnique.mockResolvedValueOnce({ id: 'proc_1' });
     procedureAccessUpsert.mockResolvedValue({ id: 'pa1' });
     const { POST } = await import('./route');
     const { req } = bictorysFixtureRequest({ status: 'succeeded' });
     await POST(req);
     expect(procedureAccessUpsert).toHaveBeenCalledWith({
       where: { userId_procedureId: { userId: 'u1', procedureId: 'proc_1' } },
-      create: { userId: 'u1', procedureId: 'proc_1', orderId: 'o1' },
+      create: { userId: 'u1', procedureId: 'proc_1', orderId: 'o1', tier: 'SIMPLE' },
       update: {},
     });
   });
@@ -193,7 +195,7 @@ describe('POST /api/webhooks/bictorys', () => {
       metadata: { tier: 'SIMPLE', procedureId: 'proc_1' },
     });
     outboxCreate.mockResolvedValue({ id: 'ob4' });
-    procedureFindUnique.mockResolvedValueOnce({ id: 'proc_1', priceFcfa: 5000 });
+    procedureFindUnique.mockResolvedValueOnce({ id: 'proc_1' });
     const { POST } = await import('./route');
     const { req } = bictorysFixtureRequest({ status: 'succeeded' });
     const res = await POST(req);
@@ -212,10 +214,100 @@ describe('POST /api/webhooks/bictorys', () => {
       metadata: { tier: 'OTHER', procedureId: 'proc_1' },
     });
     outboxCreate.mockResolvedValue({ id: 'ob5' });
+    procedureFindUnique.mockResolvedValueOnce({ id: 'proc_1' });
+    const { POST } = await import('./route');
+    const { req } = bictorysFixtureRequest({ status: 'succeeded' });
+    await POST(req);
+    // Phase 5: the procedure lookup now runs before the tier branch (needed
+    // to resolve existing SIMPLE access for COMPLET upgrade pricing), so it
+    // IS called here — but an unrecognized tier still must not grant access.
+    expect(procedureAccessUpsert).not.toHaveBeenCalled();
+  });
+
+  it('onPaid grants COMPLET directly when no prior access exists and amount covers 20000 (Phase 5)', async () => {
+    findUnique.mockResolvedValueOnce(null);
+    orderFindFirst.mockResolvedValueOnce({
+      id: 'o6',
+      userId: 'u1',
+      customerEmail: 'a@b.com',
+      amount: 20000,
+      currency: 'XOF',
+      metadata: { tier: 'COMPLET', procedureId: 'proc_1' },
+    });
+    outboxCreate.mockResolvedValue({ id: 'ob6' });
+    procedureFindUnique.mockResolvedValueOnce({ id: 'proc_1' });
+    procedureAccessFindUnique.mockResolvedValueOnce(null);
+    const { POST } = await import('./route');
+    const { req } = bictorysFixtureRequest({ status: 'succeeded' });
+    await POST(req);
+    expect(procedureAccessUpsert).toHaveBeenCalledWith({
+      where: { userId_procedureId: { userId: 'u1', procedureId: 'proc_1' } },
+      create: { userId: 'u1', procedureId: 'proc_1', orderId: 'o6', tier: 'COMPLET' },
+      update: { tier: 'COMPLET', orderId: 'o6' },
+    });
+  });
+
+  it('onPaid does not grant a direct COMPLET purchase paid at only 15000 (Phase 5)', async () => {
+    findUnique.mockResolvedValueOnce(null);
+    orderFindFirst.mockResolvedValueOnce({
+      id: 'o7',
+      userId: 'u1',
+      customerEmail: 'a@b.com',
+      amount: 15000,
+      currency: 'XOF',
+      metadata: { tier: 'COMPLET', procedureId: 'proc_1' },
+    });
+    outboxCreate.mockResolvedValue({ id: 'ob7' });
+    procedureFindUnique.mockResolvedValueOnce({ id: 'proc_1' });
+    procedureAccessFindUnique.mockResolvedValueOnce(null); // no prior SIMPLE access
     const { POST } = await import('./route');
     const { req } = bictorysFixtureRequest({ status: 'succeeded' });
     await POST(req);
     expect(procedureAccessUpsert).not.toHaveBeenCalled();
-    expect(procedureFindUnique).not.toHaveBeenCalled();
+  });
+
+  it('onPaid grants a COMPLET upgrade at the 15000 differential when prior SIMPLE access exists (Phase 5)', async () => {
+    findUnique.mockResolvedValueOnce(null);
+    orderFindFirst.mockResolvedValueOnce({
+      id: 'o8',
+      userId: 'u1',
+      customerEmail: 'a@b.com',
+      amount: 15000,
+      currency: 'XOF',
+      metadata: { tier: 'COMPLET', procedureId: 'proc_1' },
+    });
+    outboxCreate.mockResolvedValue({ id: 'ob8' });
+    procedureFindUnique.mockResolvedValueOnce({ id: 'proc_1' });
+    procedureAccessFindUnique.mockResolvedValueOnce({ tier: 'SIMPLE' });
+    const { POST } = await import('./route');
+    const { req } = bictorysFixtureRequest({ status: 'succeeded' });
+    await POST(req);
+    expect(procedureAccessUpsert).toHaveBeenCalledWith({
+      where: { userId_procedureId: { userId: 'u1', procedureId: 'proc_1' } },
+      create: { userId: 'u1', procedureId: 'proc_1', orderId: 'o8', tier: 'COMPLET' },
+      update: { tier: 'COMPLET', orderId: 'o8' },
+    });
+  });
+
+  it('onPaid never downgrades an existing COMPLET access on a replayed/duplicate SIMPLE order (Phase 5)', async () => {
+    findUnique.mockResolvedValueOnce(null);
+    orderFindFirst.mockResolvedValueOnce({
+      id: 'o9',
+      userId: 'u1',
+      customerEmail: 'a@b.com',
+      amount: 5000,
+      currency: 'XOF',
+      metadata: { tier: 'SIMPLE', procedureId: 'proc_1' },
+    });
+    outboxCreate.mockResolvedValue({ id: 'ob9' });
+    procedureFindUnique.mockResolvedValueOnce({ id: 'proc_1' });
+    const { POST } = await import('./route');
+    const { req } = bictorysFixtureRequest({ status: 'succeeded' });
+    await POST(req);
+    expect(procedureAccessUpsert).toHaveBeenCalledWith({
+      where: { userId_procedureId: { userId: 'u1', procedureId: 'proc_1' } },
+      create: { userId: 'u1', procedureId: 'proc_1', orderId: 'o9', tier: 'SIMPLE' },
+      update: {}, // empty update — a real COMPLET row would be left untouched
+    });
   });
 });
