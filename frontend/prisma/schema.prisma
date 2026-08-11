@@ -44,6 +44,7 @@ model User {
   adminActions      AdminAction[]
   cvProfile         CvProfile?
   procedureAccess   ProcedureAccess[]
+  procedureDocuments ProcedureDocument[]
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
@@ -355,7 +356,8 @@ model Procedure {
   priceFcfa Int      @default(5000)
   createdAt DateTime @default(now())
 
-  access ProcedureAccess[]
+  access    ProcedureAccess[]
+  documents ProcedureDocument[]
 
   @@index([slug])
 }
@@ -376,10 +378,35 @@ model ProcedureAccess {
   procedure   Procedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
   orderId     String    @unique
   order       Order     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  tier        String    @default("SIMPLE") // "SIMPLE" | "COMPLET" — Phase 5
   grantedAt   DateTime  @default(now())
 
   @@unique([userId, procedureId])
   @@index([userId])
+}
+
+// Phase 5 — one uploaded file per (user, procedure, checklist item). Cloudinary
+// stores the asset with `type: 'authenticated'` (never publicly reachable);
+// `resourceType` is required to mint a valid signed delivery URL later (see
+// lib/server/upload/cloudinary-client.ts's getSignedDeliveryUrl). A re-upload
+// for the same triple overwrites this row and the same Cloudinary asset
+// (deterministic public_id) — no delete endpoint needed.
+model ProcedureDocument {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  procedureId        String
+  procedure          Procedure @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+  checklistItemId    String
+  cloudinaryPublicId String    @unique
+  resourceType       String
+  filename           String
+  mimeType           String
+  sizeBytes          Int
+  uploadedAt         DateTime  @default(now())
+
+  @@unique([userId, procedureId, checklistItemId])
+  @@index([userId, procedureId])
 }
 
 model Withdrawal {
