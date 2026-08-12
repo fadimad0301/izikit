@@ -45,15 +45,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
 
     const completIds = accesses.filter((a) => a.tier === 'COMPLET').map((a) => a.procedureId);
-    const counts =
+    const docs =
       completIds.length > 0
-        ? await prisma.procedureDocument.groupBy({
-            by: ['procedureId'],
+        ? await prisma.procedureDocument.findMany({
             where: { userId: auth.user.sub, procedureId: { in: completIds } },
-            _count: { _all: true },
+            select: { procedureId: true, checklistItemId: true },
           })
         : [];
-    const uploadedByProcedureId = new Map(counts.map((c) => [c.procedureId, c._count._all]));
+    const uploadedItemsByProcedureId = new Map<string, Set<string>>();
+    for (const doc of docs) {
+      const set = uploadedItemsByProcedureId.get(doc.procedureId) ?? new Set<string>();
+      set.add(doc.checklistItemId);
+      uploadedItemsByProcedureId.set(doc.procedureId, set);
+    }
 
     const result: MyProcedure[] = [];
     for (const access of accesses) {
@@ -66,15 +70,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         continue;
       }
       const tier = access.tier as 'SIMPLE' | 'COMPLET';
+      const checklistItems = parsedChecklist.data;
+      const uploadedSet = uploadedItemsByProcedureId.get(access.procedureId);
       result.push({
         slug: access.procedure.slug,
         name: access.procedure.name,
         country: access.procedure.country,
         field: access.procedure.field,
         tier,
-        checklistTotal: parsedChecklist.data.length,
+        checklistTotal: checklistItems.length,
         documentsUploaded:
-          tier === 'COMPLET' ? (uploadedByProcedureId.get(access.procedureId) ?? 0) : null,
+          tier === 'COMPLET'
+            ? checklistItems.filter((item) => uploadedSet?.has(item.id) ?? false).length
+            : null,
         grantedAt: access.grantedAt.toISOString(),
       });
     }

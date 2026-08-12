@@ -198,7 +198,7 @@ export default function SettingsPage() {
         <Card bordered>
           <h2 className="text-lg font-semibold text-ink-900">Mon profil</h2>
           <p className="mt-1 text-sm text-charcoal-900/70">
-            Ton nom apparaît sur le CV généré. Le téléphone est optionnel.
+            Ces informations nous permettent de te contacter si besoin. Le téléphone est optionnel.
           </p>
           <form onSubmit={onSubmitProfile} className="mt-4 flex flex-col gap-4">
             <Input

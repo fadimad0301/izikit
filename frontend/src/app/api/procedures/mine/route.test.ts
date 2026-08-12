@@ -35,8 +35,7 @@ describe('GET /api/procedures/mine', () => {
 
   it('Test 2: no purchases — empty array', async () => {
     prismaMock.procedureAccess.findMany.mockResolvedValue([]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prismaMock.procedureDocument.groupBy as any).mockResolvedValue([]);
+    prismaMock.procedureDocument.findMany.mockResolvedValue([]);
     const res = await GET(makeReq());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([]);
@@ -57,8 +56,7 @@ describe('GET /api/procedures/mine', () => {
         },
       },
     ] as never);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prismaMock.procedureDocument.groupBy as any).mockResolvedValue([]);
+    prismaMock.procedureDocument.findMany.mockResolvedValue([]);
     const res = await GET(makeReq());
     const body = await res.json();
     expect(body).toEqual([
@@ -90,10 +88,9 @@ describe('GET /api/procedures/mine', () => {
         },
       },
     ] as never);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prismaMock.procedureDocument.groupBy as any).mockResolvedValue([
-      { procedureId: 'proc_2', _count: { _all: 1 } },
-    ]);
+    prismaMock.procedureDocument.findMany.mockResolvedValue([
+      { procedureId: 'proc_2', checklistItemId: 'passeport-valide' },
+    ] as never);
     const res = await GET(makeReq());
     const body = await res.json();
     expect(body[0]).toMatchObject({
@@ -118,10 +115,10 @@ describe('GET /api/procedures/mine', () => {
         },
       },
     ] as never);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prismaMock.procedureDocument.groupBy as any).mockResolvedValue([
-      { procedureId: 'proc_3', _count: { _all: 2 } },
-    ]);
+    prismaMock.procedureDocument.findMany.mockResolvedValue([
+      { procedureId: 'proc_3', checklistItemId: 'passeport-valide' },
+      { procedureId: 'proc_3', checklistItemId: 'lettre-motivation' },
+    ] as never);
     const res = await GET(makeReq());
     const body = await res.json();
     expect(body[0]).toMatchObject({ documentsUploaded: 2, checklistTotal: 2 });
@@ -154,11 +151,39 @@ describe('GET /api/procedures/mine', () => {
         },
       },
     ] as never);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prismaMock.procedureDocument.groupBy as any).mockResolvedValue([]);
+    prismaMock.procedureDocument.findMany.mockResolvedValue([]);
     const res = await GET(makeReq());
     const body = await res.json();
     expect(body).toHaveLength(1);
     expect(body[0].slug).toBe('campus-france');
+  });
+
+  it('Test 7: checklist re-seeded — stale uploaded row does not count, only items still present in the current checklist count', async () => {
+    prismaMock.procedureAccess.findMany.mockResolvedValue([
+      {
+        tier: 'COMPLET',
+        grantedAt: new Date('2026-08-05T00:00:00.000Z'),
+        procedureId: 'proc_4',
+        procedure: {
+          slug: 'campus-france',
+          name: 'Campus France',
+          country: 'France',
+          field: null,
+          // Checklist was re-seeded down to a single, different item.
+          checklist: [{ id: 'lettre-motivation', title: 'Lettre de motivation' }],
+        },
+      },
+    ] as never);
+    // User has 2 uploaded rows: one for a stale item no longer in the checklist
+    // ('passeport-valide'), one for the current item ('lettre-motivation').
+    prismaMock.procedureDocument.findMany.mockResolvedValue([
+      { procedureId: 'proc_4', checklistItemId: 'passeport-valide' },
+      { procedureId: 'proc_4', checklistItemId: 'lettre-motivation' },
+    ] as never);
+    const res = await GET(makeReq());
+    const body = await res.json();
+    // Must NOT return the raw row count of 2 — only the item still present
+    // in the current checklist counts.
+    expect(body[0]).toMatchObject({ documentsUploaded: 1, checklistTotal: 1 });
   });
 });

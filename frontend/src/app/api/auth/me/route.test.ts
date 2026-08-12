@@ -208,4 +208,9 @@ describe('PATCH /api/auth/me', () => {
     const res = await PATCH(makePatchReq({ body: {}, bearer: 'valid' }));
     expect(res.status).toBe(400);
   });
+
+  it('Test 11: no CSRF and no auth — 403 (CSRF checked before auth)', async () => {
+    const res = await PATCH(makePatchReq({ body: { name: 'Awa' }, csrf: false }));
+    expect(res.status).toBe(403);
+  });
 });
