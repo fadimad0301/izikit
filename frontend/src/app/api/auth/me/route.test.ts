@@ -16,7 +16,7 @@ vi.mock('@/lib/server/auth', async () => {
 });
 
 import { verifyToken } from '@/lib/server/auth';
-import { GET } from './route';
+import { GET, PATCH } from './route';
 import { NextRequest } from 'next/server';
 
 function makeReq(opts: { tokenCookie?: string; bearer?: string } = {}): NextRequest {
@@ -49,12 +49,21 @@ describe('GET /api/auth/me', () => {
       id: 'u1',
       email: 'a@b.com',
       tokenVersion: 0,
+      name: 'Awa Diop',
+      avatarUrl: null,
+      phone: '+221771234567',
     } as never);
 
     const res = await GET(makeReq({ bearer: 'valid-access-token' }));
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
-      user: { sub: 'u1', email: 'a@b.com' },
+      user: {
+        sub: 'u1',
+        email: 'a@b.com',
+        name: 'Awa Diop',
+        avatarUrl: null,
+        phone: '+221771234567',
+      },
     });
   });
 
@@ -91,5 +100,112 @@ describe('GET /api/auth/me', () => {
 
     const res = await GET(makeReq({ bearer: 'orphan-jwt' }));
     expect(res.status).toBe(401);
+  });
+});
+
+function makePatchReq(opts: { body?: unknown; bearer?: string; csrf?: boolean }): NextRequest {
+  const headers: Record<string, string> = {};
+  if (opts.bearer) headers.authorization = `Bearer ${opts.bearer}`;
+  if (opts.csrf !== false) {
+    headers['x-csrf-token'] = 'csrf-token';
+    headers.cookie = 'app-csrf=csrf-token';
+  }
+  return new NextRequest('https://test/api/auth/me', {
+    method: 'PATCH',
+    headers,
+    ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+  });
+}
+
+describe('PATCH /api/auth/me', () => {
+  beforeEach(() => {
+    __cookieStore.clear();
+    vi.mocked(verifyToken).mockReset();
+    vi.mocked(verifyToken).mockResolvedValue({ sub: 'u1', email: 'a@b.com', tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'a@b.com',
+      tokenVersion: 0,
+    } as never);
+  });
+
+  it('Test 1: missing CSRF header — 403', async () => {
+    const res = await PATCH(makePatchReq({ body: { name: 'Awa' }, bearer: 'valid', csrf: false }));
+    expect(res.status).toBe(403);
+  });
+
+  it('Test 2: no auth — 401', async () => {
+    const res = await PATCH(makePatchReq({ body: { name: 'Awa' } }));
+    expect(res.status).toBe(401);
+  });
+
+  it('Test 3: updates name only', async () => {
+    prismaMock.user.update.mockResolvedValue({ name: 'Awa Diop', phone: null } as never);
+    const res = await PATCH(makePatchReq({ body: { name: 'Awa Diop' }, bearer: 'valid' }));
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { name: 'Awa Diop' },
+      select: { id: true, name: true, phone: true },
+    });
+    expect(await res.json()).toEqual({ name: 'Awa Diop', phone: null });
+  });
+
+  it('Test 4: updates phone only', async () => {
+    prismaMock.user.update.mockResolvedValue({ name: null, phone: '+221771234567' } as never);
+    const res = await PATCH(
+      makePatchReq({ body: { phone: '+221 77 123 45 67' }, bearer: 'valid' }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { phone: '+221771234567' },
+      select: { id: true, name: true, phone: true },
+    });
+  });
+
+  it('Test 5: updates name and phone together', async () => {
+    prismaMock.user.update.mockResolvedValue({ name: 'Awa', phone: '+221771234567' } as never);
+    const res = await PATCH(
+      makePatchReq({ body: { name: 'Awa', phone: '+221771234567' }, bearer: 'valid' }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { name: 'Awa', phone: '+221771234567' },
+      select: { id: true, name: true, phone: true },
+    });
+  });
+
+  it('Test 6: clears phone with an empty string', async () => {
+    prismaMock.user.update.mockResolvedValue({ name: null, phone: null } as never);
+    const res = await PATCH(makePatchReq({ body: { phone: '' }, bearer: 'valid' }));
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { phone: null },
+      select: { id: true, name: true, phone: true },
+    });
+  });
+
+  it('Test 7: empty name — 400 VALIDATION_FAILED', async () => {
+    const res = await PATCH(makePatchReq({ body: { name: '' }, bearer: 'valid' }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('VALIDATION_FAILED');
+  });
+
+  it('Test 8: name over 100 chars — 400 VALIDATION_FAILED', async () => {
+    const res = await PATCH(makePatchReq({ body: { name: 'a'.repeat(101) }, bearer: 'valid' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('Test 9: malformed phone — 400 VALIDATION_FAILED', async () => {
+    const res = await PATCH(makePatchReq({ body: { phone: 'not-a-phone' }, bearer: 'valid' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('Test 10: empty body — 400 VALIDATION_FAILED', async () => {
+    const res = await PATCH(makePatchReq({ body: {}, bearer: 'valid' }));
+    expect(res.status).toBe(400);
   });
 });

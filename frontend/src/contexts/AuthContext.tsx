@@ -9,6 +9,9 @@ import { COOKIE_PREFIX } from '@/lib/constants';
 export interface User {
   id: string;
   email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  phone: string | null;
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
