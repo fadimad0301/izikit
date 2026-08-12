@@ -1,49 +1,123 @@
-// /settings — account-level controls.
+// /settings — compte : profil, mot de passe, comptes liés, statut des procédures.
 //
-// Two flows live here today:
-//   1. Set / change password
-//      - If the account was created via OAuth (hasPassword=false), the
-//        "Set password" form calls POST /api/auth/set-password — no current
-//        password required, because there isn't one.
-//      - Otherwise the "Change password" form calls PUT /api/auth/change-password
-//        with currentPassword + newPassword.
-//   2. Link a provider (Google)
-//      - When Google is not already linked, the button kicks the user to
-//        GET /api/auth/oauth/google/start?next=/settings, which goes through
-//        the normal OAuth dance and lands back on /settings linked.
-//      - When already linked, we just show a "linked" pill — no unlink action
-//        yet (would need a /api/auth/oauth/google/unlink endpoint with a
-//        guard refusing to leave the user without any sign-in method).
+// Trois flux existants (inchangés en logique, restylés en Phase 6) :
+//   1. Set / change password — voir onSubmitPassword.
+//   2. Lier Google — voir la section "Comptes liés".
+// Deux flux ajoutés en Phase 6 :
+//   3. Éditer nom + téléphone (PATCH /api/auth/me).
+//   4. Statut des procédures achetées (GET /api/procedures/mine), avec un Stamp
+//      "Dossier complet" quand tous les documents d'une procédure Complet sont déposés.
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 import { api, ApiError } from '@/lib/api';
 import { useAuth, useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { Card, Badge, Input, Button, Stamp } from '@/components/ui';
+import { useReducedMotion, DOXI_EASE } from '@/lib/motion';
+
+interface MyProcedure {
+  slug: string;
+  name: string;
+  country: string;
+  field: string | null;
+  tier: 'SIMPLE' | 'COMPLET';
+  checklistTotal: number;
+  documentsUploaded: number | null;
+  grantedAt: string;
+}
+
+function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    const serverMessage = err.body.message;
+    if (typeof serverMessage === 'string' && serverMessage.length > 0) return serverMessage;
+  }
+  return fallback;
+}
 
 export default function SettingsPage() {
   const user = useUser();
   const { refresh } = useAuth();
   const { toast } = useToast();
+  const reduceMotion = useReducedMotion();
 
-  // Password form state — fields used by either branch.
+  // Profile form state.
+  const [profileName, setProfileName] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  // Password form state.
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // "Mes procédures" state.
+  const [procedures, setProcedures] = useState<MyProcedure[] | null>(null);
+  const [proceduresError, setProceduresError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      setProfileName(user.name ?? '');
+      setProfilePhone(user.phone ?? '');
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    api<MyProcedure[]>('/api/procedures/mine')
+      .then((data) => {
+        if (!cancelled) setProcedures(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setProceduresError(apiErrorMessage(err, 'Impossible de charger tes procédures.'));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   if (!user) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 px-4">
-        <p className="text-sm text-gray-600">Chargement…</p>
+        <p className="text-sm text-charcoal-900/60">Chargement…</p>
       </main>
     );
   }
 
   const hasPassword = user.hasPassword;
   const googleLinked = user.linkedProviders.includes('google');
+
+  async function onSubmitProfile(e: FormEvent) {
+    e.preventDefault();
+    setProfileError(null);
+
+    if (profileName.trim().length === 0) {
+      setProfileError('Le nom ne peut pas être vide.');
+      return;
+    }
+
+    setProfileSubmitting(true);
+    try {
+      await api('/api/auth/me', {
+        method: 'PATCH',
+        body: { name: profileName.trim(), phone: profilePhone.trim() },
+      });
+      toast('Profil mis à jour.', 'success');
+      await refresh();
+    } catch (err) {
+      setProfileError(apiErrorMessage(err, 'Impossible de mettre à jour le profil.'));
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
 
   async function onSubmitPassword(e: FormEvent) {
     e.preventDefault();
@@ -97,107 +171,219 @@ export default function SettingsPage() {
     }
   }
 
+  function statusLine(proc: MyProcedure): { text: string; complete: boolean } {
+    if (proc.tier === 'SIMPLE') {
+      return { text: 'Débloqué', complete: false };
+    }
+    const uploaded = proc.documentsUploaded ?? 0;
+    if (proc.checklistTotal > 0 && uploaded === proc.checklistTotal) {
+      return { text: 'Dossier complet', complete: true };
+    }
+    return { text: `${uploaded} / ${proc.checklistTotal} documents déposés`, complete: false };
+  }
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-8 px-4 py-12">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-4 py-12">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold">Paramètres</h1>
-        <p className="text-sm text-gray-600">Connecté en tant que {user.email}</p>
+        <h1 className="font-serif text-2xl text-ink-900">Paramètres</h1>
+        <p className="text-sm text-charcoal-900/60">Connecté en tant que {user.email}</p>
       </header>
 
+      {/* ── Profile section ──────────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: reduceMotion ? 0 : 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: reduceMotion ? 0 : 0.35, ease: DOXI_EASE }}
+      >
+        <Card bordered>
+          <h2 className="text-lg font-semibold text-ink-900">Mon profil</h2>
+          <p className="mt-1 text-sm text-charcoal-900/70">
+            Ton nom apparaît sur le CV généré. Le téléphone est optionnel.
+          </p>
+          <form onSubmit={onSubmitProfile} className="mt-4 flex flex-col gap-4">
+            <Input
+              label="Nom complet"
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              placeholder="Awa Diop"
+            />
+            <Input
+              label="Téléphone"
+              type="tel"
+              value={profilePhone}
+              onChange={(e) => setProfilePhone(e.target.value)}
+              placeholder="+221771234567"
+              helperText="Format international, ex. +221771234567. Laisse vide pour effacer."
+            />
+            {profileError && (
+              <p role="alert" className="text-sm text-error-600">
+                {profileError}
+              </p>
+            )}
+            <div>
+              <Button type="submit" loading={profileSubmitting}>
+                Enregistrer
+              </Button>
+            </div>
+          </form>
+        </Card>
+      </motion.div>
+
       {/* ── Password section ─────────────────────────────────────────── */}
-      <section className="flex flex-col gap-3 rounded-lg border border-gray-200 p-5">
-        <h2 className="text-lg font-semibold">
-          {hasPassword ? 'Changer le mot de passe' : 'Définir un mot de passe'}
-        </h2>
-        <p className="text-sm text-gray-600">
-          {hasPassword
-            ? 'Tu peux modifier ton mot de passe ici. Les autres sessions seront déconnectées.'
-            : 'Tu t’es connecté via Google. Définis un mot de passe pour pouvoir aussi te connecter par email.'}
-        </p>
-        <form onSubmit={onSubmitPassword} className="mt-2 flex flex-col gap-4">
-          {hasPassword && (
-            <label className="flex flex-col gap-1 text-sm">
-              Mot de passe actuel
-              <input
+      <motion.div
+        initial={{ opacity: 0, y: reduceMotion ? 0 : 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          duration: reduceMotion ? 0 : 0.35,
+          delay: reduceMotion ? 0 : 0.05,
+          ease: DOXI_EASE,
+        }}
+      >
+        <Card bordered>
+          <h2 className="text-lg font-semibold text-ink-900">
+            {hasPassword ? 'Changer le mot de passe' : 'Définir un mot de passe'}
+          </h2>
+          <p className="mt-1 text-sm text-charcoal-900/70">
+            {hasPassword
+              ? 'Tu peux modifier ton mot de passe ici. Les autres sessions seront déconnectées.'
+              : 'Tu t’es connecté via Google. Définis un mot de passe pour pouvoir aussi te connecter par email.'}
+          </p>
+          <form onSubmit={onSubmitPassword} className="mt-4 flex flex-col gap-4">
+            {hasPassword && (
+              <Input
+                label="Mot de passe actuel"
                 type="password"
                 required
                 autoComplete="current-password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="rounded-md border border-gray-300 px-3 py-2"
               />
-            </label>
-          )}
-          <label className="flex flex-col gap-1 text-sm">
-            Nouveau mot de passe
-            <input
+            )}
+            <Input
+              label="Nouveau mot de passe"
               type="password"
               required
               autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2"
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Confirmer le nouveau mot de passe
-            <input
+            <Input
+              label="Confirmer le nouveau mot de passe"
               type="password"
               required
               autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2"
             />
-          </label>
-          {error && (
-            <p role="alert" className="text-sm text-red-600">
-              {error}
-            </p>
-          )}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-md bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-          >
-            {submitting
-              ? 'Enregistrement…'
-              : hasPassword
-                ? 'Changer le mot de passe'
-                : 'Définir le mot de passe'}
-          </button>
-        </form>
-      </section>
+            {error && (
+              <p role="alert" className="text-sm text-error-600">
+                {error}
+              </p>
+            )}
+            <div>
+              <Button type="submit" loading={submitting}>
+                {hasPassword ? 'Changer le mot de passe' : 'Définir le mot de passe'}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      </motion.div>
 
       {/* ── Linked providers section ────────────────────────────────── */}
-      <section className="flex flex-col gap-3 rounded-lg border border-gray-200 p-5">
-        <h2 className="text-lg font-semibold">Comptes liés</h2>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Google</span>
-            <span className="text-xs text-gray-500">
-              {googleLinked
-                ? 'Tu peux te connecter via Google.'
-                : 'Lie ton compte Google pour te connecter en un clic.'}
-            </span>
+      <motion.div
+        initial={{ opacity: 0, y: reduceMotion ? 0 : 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          duration: reduceMotion ? 0 : 0.35,
+          delay: reduceMotion ? 0 : 0.1,
+          ease: DOXI_EASE,
+        }}
+      >
+        <Card bordered>
+          <h2 className="text-lg font-semibold text-ink-900">Comptes liés</h2>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-ink-900">Google</span>
+              <span className="text-xs text-charcoal-900/60">
+                {googleLinked
+                  ? 'Tu peux te connecter via Google.'
+                  : 'Lie ton compte Google pour te connecter en un clic.'}
+              </span>
+            </div>
+            {googleLinked ? (
+              <Badge variant="success">Lié</Badge>
+            ) : (
+              <a
+                href="/api/auth/oauth/google/start?next=/settings"
+                className="rounded-xl border border-ink-900/15 px-4 py-2 text-sm font-medium text-ink-900 hover:bg-paper-100"
+              >
+                Lier Google
+              </a>
+            )}
           </div>
-          {googleLinked ? (
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-              Lié
-            </span>
-          ) : (
-            <a
-              href="/api/auth/oauth/google/start?next=/settings"
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
-            >
-              Lier Google
-            </a>
-          )}
-        </div>
-      </section>
+        </Card>
+      </motion.div>
 
-      <Link href="/dashboard" className="text-center text-sm text-gray-600 underline">
-        Retour au dashboard
+      {/* ── Mes procédures section ──────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: reduceMotion ? 0 : 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          duration: reduceMotion ? 0 : 0.35,
+          delay: reduceMotion ? 0 : 0.15,
+          ease: DOXI_EASE,
+        }}
+      >
+        <Card bordered>
+          <h2 className="text-lg font-semibold text-ink-900">Mes procédures</h2>
+
+          {proceduresError && <p className="mt-3 text-sm text-error-600">{proceduresError}</p>}
+
+          {procedures === null && !proceduresError && (
+            <p className="mt-3 text-sm text-charcoal-900/60">Chargement…</p>
+          )}
+
+          {procedures !== null && procedures.length === 0 && (
+            <p className="mt-3 text-sm text-charcoal-900/60">
+              Tu n'as encore acheté aucune procédure.{' '}
+              <Link href="/procedures" className="underline">
+                Voir les procédures
+              </Link>
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-col gap-3">
+            {procedures?.map((proc) => {
+              const status = statusLine(proc);
+              return (
+                <Link
+                  key={proc.slug}
+                  href={`/procedures/${proc.slug}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-ink-900/10 p-4 hover:bg-paper-100"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-ink-900">{proc.name}</span>
+                      <Badge variant={proc.tier === 'COMPLET' ? 'gold' : 'neutral'}>
+                        {proc.tier === 'COMPLET' ? 'Complet' : 'Simple'}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-charcoal-900/60">
+                      {proc.country}
+                      {proc.field ? ` · ${proc.field}` : ''}
+                    </p>
+                    <p className="mt-1 text-sm text-charcoal-900/75">{status.text}</p>
+                  </div>
+                  {status.complete && <Stamp size={36} delay={0} />}
+                </Link>
+              );
+            })}
+          </div>
+        </Card>
+      </motion.div>
+
+      <Link href="/procedures" className="text-center text-sm text-charcoal-900/60 underline">
+        Retour aux procédures
       </Link>
     </main>
   );
