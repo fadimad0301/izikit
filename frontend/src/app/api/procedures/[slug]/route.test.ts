@@ -85,6 +85,20 @@ describe('GET /api/procedures/[slug]', () => {
     expect(body.priceFcfa).toBe(5000);
   });
 
+  it('returns 500 and does not leak checklist when it fails schema validation (missing item ids)', async () => {
+    prismaMock.procedure.findUnique.mockResolvedValue({
+      ...PROCEDURE_ROW,
+      checklist: [{ title: 'X' }],
+    } as never);
+    mockOptionalAuth.mockResolvedValue({ user: { sub: 'user-1', email: 'me@example.com' } });
+    prismaMock.procedureAccess.findUnique.mockResolvedValue({ tier: 'SIMPLE' } as never);
+    const res = await GET(makeGet(), ctxFor('campus-france'));
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe('PROCEDURE_CATALOG_INVALID');
+    expect(body).not.toHaveProperty('checklist');
+  });
+
   it('marks per-item upload status when tier is COMPLET', async () => {
     prismaMock.procedure.findUnique.mockResolvedValue(PROCEDURE_ROW as never);
     mockOptionalAuth.mockResolvedValue({ user: { sub: 'user-1', email: 'me@example.com' } });

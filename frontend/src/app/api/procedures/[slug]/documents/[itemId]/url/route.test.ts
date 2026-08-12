@@ -38,7 +38,7 @@ describe('GET /api/procedures/[slug]/documents/[itemId]/url', () => {
     const res = await GET(makeGet(), ctxFor('campus-france', 'passeport-valide'));
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.code).toBe('DOCUMENT_NOT_FOUND');
+    expect(body.error).toBe('DOCUMENT_NOT_FOUND');
   });
 
   it('404s when no document exists for this checklist item', async () => {

@@ -181,7 +181,10 @@ export default function ProcedureDetailPage() {
     title: item.title,
     content:
       procedure.tier === 'COMPLET' ? (
-        <ChecklistItemUpload slug={slug} item={item} onUploaded={handleDocumentUploaded} />
+        <div className="flex flex-col gap-3">
+          {item.description && <p className="text-sm text-charcoal-900/70">{item.description}</p>}
+          <ChecklistItemUpload slug={slug} item={item} onUploaded={handleDocumentUploaded} />
+        </div>
       ) : (
         (item.description ?? '')
       ),

@@ -30,7 +30,7 @@ export async function GET(
     });
     if (!procedure) {
       return NextResponse.json(
-        { code: 'DOCUMENT_NOT_FOUND', message: 'Document introuvable.' },
+        { error: 'DOCUMENT_NOT_FOUND', message: 'Document introuvable.' },
         { status: 404, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
@@ -41,7 +41,7 @@ export async function GET(
     });
     if (access?.tier !== 'COMPLET') {
       return NextResponse.json(
-        { code: 'DOCUMENT_NOT_FOUND', message: 'Document introuvable.' },
+        { error: 'DOCUMENT_NOT_FOUND', message: 'Document introuvable.' },
         { status: 404, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
@@ -58,7 +58,7 @@ export async function GET(
     });
     if (!doc) {
       return NextResponse.json(
-        { code: 'DOCUMENT_NOT_FOUND', message: 'Document introuvable.' },
+        { error: 'DOCUMENT_NOT_FOUND', message: 'Document introuvable.' },
         { status: 404, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }

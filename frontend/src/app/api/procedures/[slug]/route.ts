@@ -11,7 +11,8 @@ import type { Prisma } from '@prisma/client';
 import { optionalAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
-import type { ChecklistItem } from '@/lib/server/procedures/checklist';
+import { log } from '@/lib/server/observability/log';
+import { checklistSchema } from '@/lib/server/procedures/checklist';
 import {
   PROCEDURE_SIMPLE_PRICE_FCFA,
   PROCEDURE_COMPLET_PRICE_FCFA,
@@ -70,18 +71,33 @@ export async function GET(
     }
 
     const { checklist, ...publicFields } = procedure;
-    const checklistItems = checklist as unknown as ChecklistItem[];
-    const checklistResponse = hasAccess
-      ? checklistItems.map((item) =>
-          tier === 'COMPLET'
-            ? {
-                ...item,
-                uploaded: uploadedByItem.has(item.id),
-                filename: uploadedByItem.get(item.id),
-              }
-            : item,
-        )
-      : undefined;
+    let checklistResponse: unknown[] | undefined;
+    if (hasAccess) {
+      const parsedChecklist = checklistSchema.safeParse(checklist);
+      if (!parsedChecklist.success) {
+        log.warn('procedure checklist failed to validate — likely not re-seeded after migration', {
+          procedureId: procedure.id,
+          slug,
+        });
+        return NextResponse.json(
+          {
+            error: 'PROCEDURE_CATALOG_INVALID',
+            message: 'Cette procédure a un problème de configuration, réessaie plus tard.',
+          },
+          { status: 500, headers: { 'x-request-id': reqCtx.requestId } },
+        );
+      }
+      const checklistItems = parsedChecklist.data;
+      checklistResponse = checklistItems.map((item) =>
+        tier === 'COMPLET'
+          ? {
+              ...item,
+              uploaded: uploadedByItem.has(item.id),
+              filename: uploadedByItem.get(item.id),
+            }
+          : item,
+      );
+    }
 
     return NextResponse.json(
       {

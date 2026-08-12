@@ -25,7 +25,7 @@ vi.mock('@/lib/server/auth', () => ({
 }));
 
 beforeEach(() => {
-  vi.stubEnv('UPLOAD_ALLOWED_MIME', 'image/jpeg,image/png,image/webp');
+  vi.stubEnv('PROCEDURE_DOC_ALLOWED_MIME', 'image/jpeg,image/png,image/webp,application/pdf');
   vi.stubEnv('UPLOAD_MAX_BYTES', '10485760');
   vi.stubEnv('CLOUDINARY_CLOUD_NAME', 'test-cloud');
   vi.stubEnv('CLOUDINARY_API_KEY', 'test-key');
@@ -138,6 +138,47 @@ describe('POST /api/procedures/[slug]/documents', () => {
         },
       }),
     );
+  });
+
+  it('uploads a valid PDF successfully (201)', async () => {
+    prismaMock.procedure.findUnique.mockResolvedValue(PROCEDURE_ROW as never);
+    prismaMock.procedureAccess.findUnique.mockResolvedValue({ tier: 'COMPLET' } as never);
+    prismaMock.procedureDocument.upsert.mockResolvedValue({
+      checklistItemId: 'passeport-valide',
+      filename: 'releve.pdf',
+    } as never);
+    const pdf = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'releve.pdf', {
+      type: 'application/pdf',
+    });
+    const { POST } = await import('./route');
+    const res = await POST(
+      makeReq({ checklistItemId: 'passeport-valide', file: pdf }) as never,
+      ctxFor('campus-france'),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body).toEqual({
+      checklistItemId: 'passeport-valide',
+      filename: 'releve.pdf',
+      uploaded: true,
+    });
+  });
+
+  it('returns 500 without attempting an upload when the checklist fails schema validation', async () => {
+    prismaMock.procedure.findUnique.mockResolvedValue({
+      id: 'proc_1',
+      checklist: [{ title: 'X' }],
+    } as never);
+    prismaMock.procedureAccess.findUnique.mockResolvedValue({ tier: 'COMPLET' } as never);
+    const { POST } = await import('./route');
+    const res = await POST(
+      makeReq({ checklistItemId: 'passeport-valide', file: jpeg() }) as never,
+      ctxFor('campus-france'),
+    );
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.code).toBe('PROCEDURE_CATALOG_INVALID');
+    expect(prismaMock.procedureDocument.upsert).not.toHaveBeenCalled();
   });
 
   it('magic byte mismatch returns 415', async () => {

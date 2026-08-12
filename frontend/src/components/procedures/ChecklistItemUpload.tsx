@@ -59,13 +59,33 @@ export function ChecklistItemUpload({ slug, item, onUploaded }: ChecklistItemUpl
       const fd = new FormData();
       fd.append('checklistItemId', item.id);
       fd.append('file', file);
-      const csrfToken = getCsrfTokenForUpload();
-      const res = await fetch(`${API_URL}/api/procedures/${slug}/documents`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: csrfToken ? { 'x-csrf-token': csrfToken } : {},
-        body: fd,
-      });
+
+      const doUpload = (csrfToken: string | null) =>
+        fetch(`${API_URL}/api/procedures/${slug}/documents`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: csrfToken ? { 'x-csrf-token': csrfToken } : {},
+          body: fd,
+        });
+
+      let res = await doUpload(getCsrfTokenForUpload());
+
+      // Access JWTs live 15 minutes (see CLAUDE.md's auth model). A student
+      // assembling several uploads on this page can plausibly outlast that.
+      // Unlike every other mutating call in this app, this raw fetch bypasses
+      // api()'s built-in 401-refresh-and-retry, so replicate it here for this
+      // one explicit, user-initiated, idempotent-upsert action — retried
+      // exactly once, with a fresh CSRF token (a refresh may rotate it).
+      if (res.status === 401) {
+        const refreshRes = await fetch(`${API_URL}/api/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (refreshRes.ok) {
+          res = await doUpload(getCsrfTokenForUpload());
+        }
+      }
+
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { message?: string };
         throw new Error(body.message || 'Échec de l’envoi.');
@@ -94,15 +114,10 @@ export function ChecklistItemUpload({ slug, item, onUploaded }: ChecklistItemUpl
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-charcoal-900/85">{item.title}</p>
         {item.uploaded ? (
-          <Badge variant="success" className="mt-1">
-            {item.filename ?? 'Envoyé'}
-          </Badge>
+          <Badge variant="success">{item.filename ?? 'Envoyé'}</Badge>
         ) : (
-          <Badge variant="neutral" className="mt-1">
-            Manquant
-          </Badge>
+          <Badge variant="neutral">Manquant</Badge>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2">

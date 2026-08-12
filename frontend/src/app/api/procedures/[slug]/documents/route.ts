@@ -10,13 +10,14 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { log } from '@/lib/server/observability/log';
 import {
   StorageNotConfiguredError,
   uploadAuthenticatedBuffer,
 } from '@/lib/server/upload/cloudinary-client';
 import { sanitizeFilename } from '@/lib/server/upload/sanitize-filename';
 import { verifyMagicBytes } from '@/lib/server/upload/sniff';
-import type { ChecklistItem } from '@/lib/server/procedures/checklist';
+import { checklistSchema } from '@/lib/server/procedures/checklist';
 
 export async function POST(
   req: NextRequest,
@@ -53,7 +54,12 @@ export async function POST(
       );
     }
 
-    const allowedMime = (process.env.UPLOAD_ALLOWED_MIME ?? 'image/jpeg,image/png,image/webp')
+    // Dedicated allowlist for procedure documents (passport scans, transcripts) —
+    // distinct from the shared UPLOAD_ALLOWED_MIME used by the public avatar
+    // upload route, since PDFs are routine here but not for avatars.
+    const allowedMime = (
+      process.env.PROCEDURE_DOC_ALLOWED_MIME ?? 'image/jpeg,image/png,image/webp,application/pdf'
+    )
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
@@ -78,7 +84,21 @@ export async function POST(
         { status: 400, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
-    const checklistItems = procedure.checklist as unknown as ChecklistItem[];
+    const parsedChecklist = checklistSchema.safeParse(procedure.checklist);
+    if (!parsedChecklist.success) {
+      log.warn('procedure checklist failed to validate — likely not re-seeded after migration', {
+        procedureId: procedure.id,
+        slug,
+      });
+      return NextResponse.json(
+        {
+          code: 'PROCEDURE_CATALOG_INVALID',
+          message: 'Cette procédure a un problème de configuration, réessaie plus tard.',
+        },
+        { status: 500, headers: { 'x-request-id': reqCtx.requestId } },
+      );
+    }
+    const checklistItems = parsedChecklist.data;
     if (!checklistItems.some((item) => item.id === checklistItemId)) {
       return NextResponse.json(
         { code: 'UNKNOWN_CHECKLIST_ITEM', message: 'Item de checklist inconnu.' },
@@ -120,6 +140,12 @@ export async function POST(
 
     let uploaded;
     try {
+      // Known edge case (not fixed here): `resource_type: 'auto'` inside
+      // uploadAuthenticatedBuffer may categorize non-image types (e.g. PDF)
+      // as Cloudinary's `raw` resource type. If a user later re-uploads the
+      // same checklist item under a different file extension, that could in
+      // theory produce a second Cloudinary asset instead of overwriting the
+      // first — worth watching, not a v1 blocker.
       uploaded = await uploadAuthenticatedBuffer(publicId, buf, file.type);
     } catch (e) {
       if (e instanceof StorageNotConfiguredError) {
