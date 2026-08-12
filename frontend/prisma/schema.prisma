@@ -23,6 +23,10 @@ model User {
   name              String?
   // Optional avatar URL — populated from OAuth profile on first sign-in.
   avatarUrl         String?
+  // Optional contact phone, E.164 (e.g. "+221771234567"). Validated by
+  // zPhone at the API layer (frontend/src/lib/server/zod-helpers.ts), not
+  // enforced in the DB. No SMS/OTP verification — contact info only.
+  phone             String?
   // App-wide role. USER is the default; ADMIN unlocks /admin back-office;
   // SUPERADMIN can promote/demote other admins. Bootstrap an initial
   // SUPERADMIN via `pnpm db:make-superadmin <email>` (see scripts).
