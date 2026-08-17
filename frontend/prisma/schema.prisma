@@ -358,6 +358,11 @@ model Procedure {
   tagline   String // une phrase d'accroche pour la carte de sélection
   checklist Json // [{ title: string; description?: string }] — révélé après achat
   priceFcfa Int      @default(5000)
+  // Masque la procédure du catalogue public (GET /api/procedures) sans la
+  // supprimer — les acheteurs existants (ProcedureAccess) gardent leur accès
+  // intact. Une vraie suppression casserait onDelete:Restrict dès qu'un
+  // achat existe ; l'archivage (Phase 7) est le seul retrait possible.
+  isArchived Boolean @default(false)
   createdAt DateTime @default(now())
 
   access    ProcedureAccess[]
