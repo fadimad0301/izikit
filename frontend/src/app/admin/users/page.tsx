@@ -65,7 +65,6 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     void load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
