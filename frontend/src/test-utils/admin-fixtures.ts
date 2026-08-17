@@ -15,7 +15,15 @@
 // Tests that need uniqueness override fields explicitly.
 import { vi } from 'vitest';
 import bcrypt from 'bcryptjs';
-import type { User, Order, OutboxEvent, EmailJob, Withdrawal, Prisma } from '@prisma/client';
+import type {
+  User,
+  Order,
+  OutboxEvent,
+  EmailJob,
+  Withdrawal,
+  Procedure,
+  Prisma,
+} from '@prisma/client';
 import type { PaymentProvider, ChargeResult } from '@/lib/server/payments/provider';
 
 const FROZEN_NOW = new Date('2026-05-08T12:00:00.000Z');
@@ -361,4 +369,38 @@ export function seedWithdrawal(overrides: WithdrawalOverrides = {}): Withdrawal 
     processedAt: overrides.processedAt ?? null,
     completedAt: overrides.completedAt ?? null,
   } as Withdrawal;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Phase 7 — Procedure fixtures (admin catalog CRUD)
+// ────────────────────────────────────────────────────────────────────
+
+interface ProcedureOverrides {
+  id?: string;
+  slug?: string;
+  name?: string;
+  country?: string;
+  field?: string | null;
+  tagline?: string;
+  checklist?: Prisma.JsonValue;
+  priceFcfa?: number;
+  isArchived?: boolean;
+  createdAt?: Date;
+}
+
+export function seedProcedure(overrides: ProcedureOverrides = {}): Procedure {
+  return {
+    id: overrides.id ?? `proc_${Math.random().toString(36).slice(2, 10)}`,
+    slug: overrides.slug ?? 'campus-france',
+    name: overrides.name ?? 'Campus France',
+    country: overrides.country ?? 'France',
+    field: overrides.field ?? null,
+    tagline: overrides.tagline ?? 'Étudie en France via Campus France.',
+    checklist: (overrides.checklist ?? [
+      { id: 'passport', title: 'Copie du passeport' },
+    ]) as Prisma.JsonValue,
+    priceFcfa: overrides.priceFcfa ?? 5000,
+    isArchived: overrides.isArchived ?? false,
+    createdAt: overrides.createdAt ?? FROZEN_NOW,
+  } as Procedure;
 }
