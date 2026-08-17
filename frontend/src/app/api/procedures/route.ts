@@ -23,6 +23,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
   return withRequestContext(ctx, async () => {
     const procedures = await prisma.procedure.findMany({
+      where: { isArchived: false },
       select: PROCEDURE_LIST_SELECT,
       orderBy: { createdAt: 'asc' },
     });

@@ -49,4 +49,26 @@ describe('GET /api/procedures', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([]);
   });
+
+  it('excludes archived procedures via the where clause', async () => {
+    prismaMock.procedure.findMany.mockResolvedValue([
+      {
+        id: 'proc_1',
+        slug: 'campus-france',
+        name: 'Campus France',
+        country: 'France',
+        field: null,
+        tagline: 'Candidature aux universités françaises.',
+      },
+    ] as never);
+
+    const res = await GET(makeGet());
+    expect(res.status).toBe(200);
+
+    expect(prismaMock.procedure.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { isArchived: false },
+      }),
+    );
+  });
 });
