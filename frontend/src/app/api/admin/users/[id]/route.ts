@@ -40,7 +40,27 @@ export async function GET(
     const { id } = await ctx.params;
     const user = await prisma.user.findUnique({
       where: { id },
-      select: USER_SELECT,
+      select: {
+        ...USER_SELECT,
+        procedureAccess: {
+          select: {
+            tier: true,
+            grantedAt: true,
+            procedure: { select: { id: true, slug: true, name: true } },
+          },
+        },
+        procedureDocuments: {
+          select: {
+            id: true,
+            procedureId: true,
+            checklistItemId: true,
+            filename: true,
+            mimeType: true,
+            sizeBytes: true,
+            uploadedAt: true,
+          },
+        },
+      },
     });
     if (!user) {
       return NextResponse.json(

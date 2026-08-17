@@ -84,4 +84,43 @@ describe('/api/admin/users/[id] — detail', () => {
     expect(res.status).toBe(403);
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
   });
+
+  it('GET includes procedureAccess and procedureDocuments (Phase 7)', async () => {
+    const user = seedAdmin({ id: 'u1', role: 'USER' });
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      ...user,
+      procedureAccess: [
+        {
+          tier: 'COMPLET',
+          grantedAt: new Date('2026-08-01T00:00:00.000Z'),
+          procedure: { id: 'proc_1', slug: 'campus-france', name: 'Campus France' },
+        },
+      ],
+      procedureDocuments: [
+        {
+          id: 'doc_1',
+          procedureId: 'proc_1',
+          checklistItemId: 'passport',
+          filename: 'passport.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 12345,
+          uploadedAt: new Date('2026-08-02T00:00:00.000Z'),
+        },
+      ],
+    } as never);
+
+    const res = await GET(makeGet('http://test/api/admin/users/u1'), ctxWith('u1'));
+    expect(res.status).toBe(200);
+
+    const args = prismaMock.user.findUnique.mock.calls[0]?.[0];
+    const select = args?.select as Record<string, unknown> | undefined;
+    expect(select?.['procedureAccess']).toBeTruthy();
+    expect(select?.['procedureDocuments']).toBeTruthy();
+
+    const body = (await res.json()) as {
+      user: { procedureAccess: unknown[]; procedureDocuments: unknown[] };
+    };
+    expect(body.user.procedureAccess).toHaveLength(1);
+    expect(body.user.procedureDocuments).toHaveLength(1);
+  });
 });
