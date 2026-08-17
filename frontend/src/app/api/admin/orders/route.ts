@@ -5,8 +5,8 @@
 // filters. since/until are silently ignored when malformed (D-LIST-05
 // spirit: admin listings tolerate input rather than 400-ing).
 //
-// Field whitelist excludes `metadata` (often large; can be added later if
-// admin needs it) but includes the essentials for the back-office UI.
+// `metadata` is included — Doxi orders carry `{tier, procedureId, procedureSlug}`,
+// needed for the admin orders UI (Phase 7).
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -25,6 +25,7 @@ const ORDER_SELECT = {
   currency: true,
   status: true,
   customerEmail: true,
+  metadata: true,
   provider: true,
   providerChargeId: true,
   paymentUrl: true,

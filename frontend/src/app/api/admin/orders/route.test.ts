@@ -50,8 +50,28 @@ describe('/api/admin/orders [Wave 1] — list', () => {
     const args = prismaMock.order.findMany.mock.calls[0]?.[0];
     expect(args?.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
     expect(args?.select).toMatchObject({ id: true, status: true, amount: true });
-    // metadata excluded — confirms whitelist
-    expect((args?.select as Record<string, unknown> | undefined)?.['metadata']).toBeUndefined();
+  });
+
+  it('GET includes metadata in the select (Phase 7 — procedure/tier visibility)', async () => {
+    prismaMock.order.findMany.mockResolvedValueOnce([
+      seedOrder({
+        id: 'o1',
+        metadata: { tier: 'SIMPLE', procedureId: 'proc_1', procedureSlug: 'campus-france' },
+      }),
+    ] as never);
+
+    const res = await GET(makeGet('http://test/api/admin/orders'));
+    expect(res.status).toBe(200);
+
+    const args = prismaMock.order.findMany.mock.calls[0]?.[0];
+    expect((args?.select as Record<string, unknown> | undefined)?.['metadata']).toBe(true);
+
+    const body = (await res.json()) as { items: Array<{ metadata: unknown }> };
+    expect(body.items[0]?.metadata).toEqual({
+      tier: 'SIMPLE',
+      procedureId: 'proc_1',
+      procedureSlug: 'campus-france',
+    });
   });
 
   it('GET returns empty 200 (never 404) on no rows', async () => {
