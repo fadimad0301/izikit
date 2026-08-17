@@ -25,6 +25,7 @@ export interface ProcedureFormValues {
 }
 
 interface ProcedureFormProps {
+  /** Read only once at mount via useState's lazy initializer — the consumer must not mount this component before initialValues is ready (gate rendering behind a loading check rather than expecting a later prop update to resync the form). */
   initialValues?: ProcedureFormValues;
   submitLabel: string;
   submitting: boolean;
