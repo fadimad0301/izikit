@@ -40,6 +40,13 @@ vitest-mock-extended, Tailwind v4 + existing Doxi design tokens, framer-motion.
   contract as `procedures/[slug]/documents/[itemId]/url/route.ts` (Phase 5).
 - No test file for any new `/admin/*` page or `ProcedureForm` — matches the existing
   convention (zero page/component tests anywhere in this app).
+- Mount-only `useEffect(() => { void load(true); }, []);` blocks use a bare empty
+  dependency array with NO `// eslint-disable-next-line react-hooks/exhaustive-deps`
+  comment. Discovered during Task 11: this project's ESLint config never registers the
+  `react-hooks` plugin, and this ESLint version hard-errors (not silently no-ops) on a
+  disable comment for an unregistered rule name — confirmed via `pnpm lint`. Do not add
+  the plugin/rule to `eslint.config.mjs` to "fix" this — that file is out of scope for
+  every task in this plan.
 - French, tutoiement copy throughout, matching every other Doxi-facing string in the app.
 - No "Retraits" admin screen, no per-procedure buyer list, no price field in any admin
   form — all explicitly out of scope per the approved design.
@@ -1665,7 +1672,6 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     void load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -2051,7 +2057,6 @@ export default function AdminOrdersPage() {
 
   useEffect(() => {
     void load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function procedureLabel(order: AdminOrder): string {
@@ -2193,7 +2198,6 @@ export default function AdminProceduresPage() {
 
   useEffect(() => {
     void load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function toggleArchive(procedure: AdminProcedure) {
@@ -2810,7 +2814,6 @@ export default function AdminAuditLogPage() {
 
   useEffect(() => {
     void load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
