@@ -1,7 +1,7 @@
 // /admin/users — list with search-by-email/name and cursor "load more".
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { api, ApiError } from '@/lib/api';
@@ -44,31 +44,29 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(
-    async (reset: boolean) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        if (q) params.set('q', q);
-        if (!reset && cursor) params.set('cursor', cursor);
-        params.set('limit', '50');
-        const res = await api<ListResponse>(`/api/admin/users?${params.toString()}`);
-        setUsers((prev) => (reset ? res.items : [...prev, ...res.items]));
-        setCursor(res.nextCursor);
-        setHasMore(!!res.nextCursor);
-      } catch (err) {
-        setError(apiErrorMessage(err, 'Impossible de charger les utilisateurs.'));
-      } finally {
-        setLoading(false);
-      }
-    },
-    [q, cursor],
-  );
+  async function load(reset: boolean) {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (q) params.set('q', q);
+      if (!reset && cursor) params.set('cursor', cursor);
+      params.set('limit', '50');
+      const res = await api<ListResponse>(`/api/admin/users?${params.toString()}`);
+      setUsers((prev) => (reset ? res.items : [...prev, ...res.items]));
+      setCursor(res.nextCursor);
+      setHasMore(!!res.nextCursor);
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Impossible de charger les utilisateurs.'));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     void load(true);
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex flex-col gap-6">
