@@ -12,7 +12,6 @@
 export type OutboxEvent =
   | NotificationPaymentReceivedEvent
   | EmailPaymentConfirmationEvent
-  | EmailVerificationCodeEvent
   | EmailPasswordResetEvent;
 
 export interface NotificationPaymentReceivedEvent {
@@ -32,19 +31,6 @@ export interface EmailPaymentConfirmationEvent {
     orderId: string;
     amount: number;
     currency: string;
-  };
-}
-
-/**
- * Phase 1 — emitted by signup + resend-verification routes; consumed by the
- * email-queue cron in Phase 5 (which calls verificationEmail() to render).
- */
-export interface EmailVerificationCodeEvent {
-  kind: 'email.verification_code';
-  payload: {
-    to: string;
-    code: string;
-    expiresAt: string;
   };
 }
 

@@ -6,7 +6,7 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 export const COOKIE_PREFIX = process.env.NEXT_PUBLIC_COOKIE_PREFIX ?? 'app';
 
-// Where auth screens (login, verify-email) send the user after success.
+// Where auth screens (login, signup) send the user after success.
 // `/dashboard` doesn't exist yet (lands in a later phase) — one constant so
 // that phase only has to change this line, not every auth page.
 export const POST_AUTH_REDIRECT = '/';

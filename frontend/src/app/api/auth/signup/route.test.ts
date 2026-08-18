@@ -6,23 +6,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { NextRequest } from 'next/server';
+import { mockNextCookies, __cookieStore } from '@/test-utils/mock-cookies';
 
-// Outbox + dummy-bcrypt mocks installed at module level so they hoist above
-// the route's imports.
-vi.mock('@/lib/server/outbox', () => ({
-  enqueueOutbox: vi.fn().mockResolvedValue({ id: 'outbox-1' }),
-}));
-vi.mock('@/lib/server/auth/dummy-bcrypt', () => ({
-  dummyBcryptCompare: vi.fn().mockResolvedValue(undefined),
-}));
+mockNextCookies();
+
 vi.mock('@/lib/server/auth/hibp', () => ({
   isPwned: vi.fn().mockResolvedValue(false),
 }));
 
+// Real bcrypt is slow enough (by design) to make the happy-path test flaky
+// under full-suite parallel load — mock just the hash, same reasoning
+// login/route.test.ts uses for mocking verifyPassword. createAccessToken /
+// createRefreshToken / setAuthCookies / setCsrfCookie stay real.
+vi.mock('@/lib/server/auth', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/server/auth')>('@/lib/server/auth');
+  return {
+    ...actual,
+    hashPassword: vi.fn().mockResolvedValue('$2a$12$mockmockmockmockmockmockmockmockmockmockmoc'),
+  };
+});
+
 import { POST } from './route';
-import { dummyBcryptCompare } from '@/lib/server/auth/dummy-bcrypt';
 import { isPwned } from '@/lib/server/auth/hibp';
-import { enqueueOutbox } from '@/lib/server/outbox';
 
 function makeReq(body: unknown): NextRequest {
   // Build init inline so optional fields (body) aren't typed as `T | undefined`,
@@ -40,53 +45,47 @@ function makeReq(body: unknown): NextRequest {
 }
 
 beforeEach(() => {
+  __cookieStore.clear();
   vi.clearAllMocks();
-  // Default $transaction passes the prismaMock as `tx` so writes within the
-  // callback hit the same mocks as the outer client (mockDeep proxies them).
-  prismaMock.$transaction.mockImplementation((cb: unknown) => {
-    if (typeof cb === 'function') {
-      return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
-    }
-    return Promise.resolve(cb);
-  });
 });
 
 describe('POST /api/auth/signup', () => {
-  it('creates a new user, code, and outbox event for genuinely new emails', async () => {
+  it('creates a new user and logs them in — issues 3 cookies (no email-verification step)', async () => {
     prismaMock.user.findUnique.mockResolvedValue(null);
-    prismaMock.user.create.mockResolvedValue({ id: 'u-new' } as never);
-    prismaMock.verificationCode.create.mockResolvedValue({} as never);
+    prismaMock.user.create.mockResolvedValue({
+      id: 'u-new',
+      email: 'new@example.com',
+      tokenVersion: 0,
+    } as never);
 
     const res = await POST(makeReq({ email: 'new@example.com', password: 'a-strong-passphrase' }));
     expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body).toEqual({ ok: true });
+    expect(body).toMatchObject({ ok: true, user: { sub: 'u-new', email: 'new@example.com' } });
 
     expect(prismaMock.user.create).toHaveBeenCalledTimes(1);
-    expect(prismaMock.verificationCode.create).toHaveBeenCalledTimes(1);
-    const codeArg = prismaMock.verificationCode.create.mock.calls[0]?.[0];
-    expect(codeArg?.data?.type).toBe('EMAIL_VERIFY');
+    const createArg = prismaMock.user.create.mock.calls[0]?.[0];
+    expect(createArg?.data?.emailVerifiedAt).toBeInstanceOf(Date);
 
-    expect(enqueueOutbox).toHaveBeenCalledTimes(1);
-    const outboxArg = (enqueueOutbox as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1];
-    expect(outboxArg?.kind).toBe('email.verification_code');
-    expect(outboxArg?.payload?.to).toBe('new@example.com');
+    expect(__cookieStore.has('app-token')).toBe(true);
+    expect(__cookieStore.has('app-refresh')).toBe(true);
+    expect(__cookieStore.has('app-csrf')).toBe(true);
   });
 
-  it('returns identical 201 + dummy-bcrypts on existing email (enumeration-resist)', async () => {
+  it('returns 409 EMAIL_ALREADY_EXISTS for an existing email — no cookies issued', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u-existing' } as never);
 
     const res = await POST(
       makeReq({ email: 'existing@example.com', password: 'a-strong-passphrase' }),
     );
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(409);
     const body = await res.json();
-    expect(body).toEqual({ ok: true });
+    expect(body.error).toBe('EMAIL_ALREADY_EXISTS');
 
-    expect(dummyBcryptCompare).toHaveBeenCalledTimes(1);
     expect(prismaMock.user.create).not.toHaveBeenCalled();
-    expect(prismaMock.verificationCode.create).not.toHaveBeenCalled();
-    expect(enqueueOutbox).not.toHaveBeenCalled();
+    expect(__cookieStore.has('app-token')).toBe(false);
+    expect(__cookieStore.has('app-refresh')).toBe(false);
+    expect(__cookieStore.has('app-csrf')).toBe(false);
   });
 
   it('rejects banned passwords with PASSWORD_BANNED before user lookup', async () => {
@@ -115,9 +114,10 @@ describe('POST /api/auth/signup', () => {
   });
 
   it('returns 429 TOO_MANY_SIGNUP_ATTEMPTS when the per-email limit is hit', async () => {
-    prismaMock.user.findUnique.mockResolvedValue(null);
-    prismaMock.user.create.mockResolvedValue({ id: 'u-rate' } as never);
-    prismaMock.verificationCode.create.mockResolvedValue({} as never);
+    // Rate limiting runs before the new-vs-existing branch, so an existing
+    // email keeps every call on the fast 409 path (no bcrypt/JWT work) —
+    // avoids 5x real crypto in parallel timing out the test.
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u-rate' } as never);
 
     const calls = await Promise.all(
       Array.from({ length: 6 }, () =>

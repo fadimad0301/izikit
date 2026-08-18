@@ -47,8 +47,6 @@ const envSchema = z.object({
   AUTH_SIGNUP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   AUTH_FORGOT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(3),
   AUTH_RESET_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
-  AUTH_VERIFY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
-  AUTH_RESEND_VERIFY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(3),
   AUTH_LOCKOUT_THRESHOLD: z.coerce.number().int().positive().default(5),
   AUTH_LOCKOUT_DURATION_MIN: z.coerce.number().int().positive().default(30),
   AUTH_FORGOT_TARGET_LATENCY_MS: z.coerce.number().int().nonnegative().default(350),

@@ -5,12 +5,15 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, storeCsrfToken } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { POST_AUTH_REDIRECT } from '@/lib/constants';
 import { signupSchema, type SignupInput } from '@/lib/validation/auth';
 import { Card, Input, Button } from '@/components/ui';
 
 export default function SignupPage() {
   const router = useRouter();
+  const { refresh } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
   const {
     register,
@@ -21,13 +24,20 @@ export default function SignupPage() {
   async function onSubmit(values: SignupInput) {
     setFormError(null);
     try {
-      // Enumeration-resistant endpoint: always 201, never issues cookies —
-      // the account isn't usable until the email is verified.
-      await api('/api/auth/signup', { method: 'POST', body: values });
-      router.push(`/verify-email?email=${encodeURIComponent(values.email)}`);
+      // No email verification step: the account is created and logged in
+      // in the same request.
+      const res = await api<{ csrfToken?: string }>('/api/auth/signup', {
+        method: 'POST',
+        body: values,
+      });
+      if (res.csrfToken) storeCsrfToken(res.csrfToken);
+      await refresh();
+      router.push(POST_AUTH_REDIRECT);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'TOO_MANY_SIGNUP_ATTEMPTS') {
         setFormError('Trop de tentatives pour cette adresse. Réessaie dans une heure.');
+      } else if (err instanceof ApiError && err.code === 'EMAIL_ALREADY_EXISTS') {
+        setFormError('Un compte existe déjà avec cette adresse. Connecte-toi plutôt.');
       } else {
         setFormError(err instanceof ApiError ? err.message : 'Une erreur est survenue.');
       }

@@ -5,7 +5,7 @@
 //
 // Usage: pnpm smoke:auth   (after `pnpm dev` in another terminal)
 //
-// Covers: signup → fetch verification code via Prisma → verify-email →
+// Covers: signup (issues cookies directly — no email-verification step) →
 // me → logout. Exits 0 on full pass, 1 + log on any failure.
 //
 // NOT run in CI (requires a live server). Manual UAT only — that's why no
@@ -92,35 +92,16 @@ export async function main(): Promise<number> {
   try {
     console.log(`Smoke against ${BASE_URL} as ${TEST_EMAIL}\n`);
 
-    // 1. Signup — enumeration-resistant 201, NO cookies.
+    // 1. Signup — no email-verification step, cookies issued directly.
     const signupRes = await fetch(`${BASE_URL}/api/auth/signup`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ email: TEST_EMAIL, password: TEST_PASSWORD }),
     });
     await assertStatus('signup', signupRes, 201);
+    recordCookies(signupRes);
 
-    // 2. Peek the verification code from DB (dev-only, single-use).
-    const user = await prisma.user.findUnique({ where: { email: TEST_EMAIL } });
-    if (!user) fail('db.findUser', 0, { email: TEST_EMAIL });
-    const codeRow = await prisma.verificationCode.findFirst({
-      where: { userId: user.id, type: 'EMAIL_VERIFY', usedAt: null },
-      orderBy: { createdAt: 'desc' },
-      select: { code: true },
-    });
-    if (!codeRow) fail('db.findCode', 0, { userId: user.id });
-    console.log(`  ✓ db.peekCode: ${codeRow.code.slice(0, 2)}…`);
-
-    // 3. Verify-email — issues cookies on success.
-    const verifyRes = await fetch(`${BASE_URL}/api/auth/verify-email`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: TEST_EMAIL, code: codeRow.code }),
-    });
-    await assertStatus('verify-email', verifyRes, 200);
-    recordCookies(verifyRes);
-
-    // 4. GET /me — proves access cookie is valid.
+    // 2. GET /me — proves the access cookie issued at signup is valid.
     const meRes = await fetch(`${BASE_URL}/api/auth/me`, {
       headers: { cookie: cookieHeader() },
     });

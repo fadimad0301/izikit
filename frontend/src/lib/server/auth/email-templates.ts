@@ -26,13 +26,6 @@ export interface EmailTemplate {
   text: string;
 }
 
-export interface VerificationEmailArgs {
-  code: string;
-  email: string;
-  /** Optional ISO-8601 expiry; falls back to "soon" wording when omitted. */
-  expiresAt?: string;
-}
-
 export interface ResetPasswordEmailArgs {
   code: string;
   email: string;
@@ -77,16 +70,6 @@ function ttlWording(expiresAtIso: string | undefined): string {
   if (minutes < 60) return `in ${minutes} minute${minutes === 1 ? '' : 's'}`;
   const hours = Math.floor(minutes / 60);
   return `in ${hours} hour${hours === 1 ? '' : 's'}`;
-}
-
-export function verificationEmail(args: VerificationEmailArgs): EmailTemplate {
-  const code = htmlEscape(args.code);
-  const ttl = ttlWording(args.expiresAt);
-  return {
-    subject: 'Verify your email',
-    html: `<p>Hi,</p><p>Your verification code is <strong>${code}</strong>.</p><p>It expires ${ttl}. If you did not request this, ignore this email.</p>`,
-    text: `Your verification code is ${args.code}. It expires ${ttl}. If you did not request this, ignore this email.`,
-  };
 }
 
 export function resetPasswordEmail(args: ResetPasswordEmailArgs): EmailTemplate {

@@ -25,12 +25,6 @@ const verificationCode = z
   .length(8, 'Le code fait 8 caractères.')
   .regex(/^[A-Z2-9]{8}$/, 'Code invalide.');
 
-export const verifyEmailSchema = z.object({
-  email: z.string().email('Adresse e-mail invalide.'),
-  code: verificationCode,
-});
-export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
-
 export const resetPasswordSchema = z.object({
   email: z.string().email('Adresse e-mail invalide.'),
   code: verificationCode,

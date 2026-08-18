@@ -75,15 +75,14 @@ Référence env complète avec toutes les flags : voir [`.env.example`](.env.exa
 
 40 routes sous `frontend/src/app/api/`. Toutes déclarent `export const runtime = 'nodejs'` (enforced par [`frontend/src/lib/server/observability/runtime-enforcement.test.ts`](frontend/src/lib/server/observability/runtime-enforcement.test.ts)).
 
-### Auth (`/api/auth/*`) — 10 routes
+### Auth (`/api/auth/*`) — 9 routes
 | Méthode | Path | Auth |
 |---|---|---|
-| POST | `/signup` | aucune |
+| POST | `/signup` | aucune (connecte directement — pas d'étape de vérification email) |
 | POST | `/login` | aucune |
 | POST | `/logout` | cookies |
 | POST | `/refresh` | cookie refresh (scope `/api/auth`) |
 | GET | `/me` | cookie access |
-| POST | `/verify-email` | aucune |
 | POST | `/forgot-password` | aucune |
 | POST | `/reset-password` | aucune |
 | PUT | `/change-password` | access + CSRF |
