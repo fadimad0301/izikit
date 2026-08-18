@@ -30,4 +30,17 @@ describe('checklistSchema', () => {
     ]);
     expect(result.success).toBe(true);
   });
+
+  it('rejects an empty array', () => {
+    const result = checklistSchema.safeParse([]);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects duplicate item ids', () => {
+    const result = checklistSchema.safeParse([
+      { id: 'a', title: 'A' },
+      { id: 'a', title: 'A bis' },
+    ]);
+    expect(result.success).toBe(false);
+  });
 });

@@ -85,12 +85,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // slugify() strips everything but [a-z0-9-] — a name made entirely of
+    // characters outside that set (e.g. CJK, emoji) would otherwise hand
+    // ensureUniqueSlug an empty base and produce slugs like "-2", "-3".
+    // Guard here rather than in slug.ts (protected — CLAUDE.md), since this
+    // is a Doxi-specific validation rule, not a slug-generation concern.
+    const slugBase = slugify(parsed.data.name);
+    if (slugBase.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'VALIDATION_FAILED',
+          message: 'Le nom doit contenir au moins une lettre ou un chiffre.',
+        },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
     // ensureUniqueSlug only resolves after `create` inside the closure has
     // succeeded at least once — createdProcedure is always set by the time
     // we reach the code below. The `!` assertions reflect that invariant
     // rather than relying on cross-closure control-flow narrowing.
     let createdProcedure: { id: string; slug: string } | null = null;
-    const slug = await ensureUniqueSlug(slugify(parsed.data.name), async (candidate) => {
+    const slug = await ensureUniqueSlug(slugBase, async (candidate) => {
       const created = await prisma.procedure.create({
         data: {
           name: parsed.data.name,

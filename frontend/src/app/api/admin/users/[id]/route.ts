@@ -43,6 +43,8 @@ export async function GET(
       select: {
         ...USER_SELECT,
         procedureAccess: {
+          orderBy: { grantedAt: 'desc' },
+          take: 100,
           select: {
             tier: true,
             grantedAt: true,
@@ -50,6 +52,8 @@ export async function GET(
           },
         },
         procedureDocuments: {
+          orderBy: { uploadedAt: 'desc' },
+          take: 100,
           select: {
             id: true,
             procedureId: true,

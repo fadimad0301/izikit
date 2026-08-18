@@ -45,19 +45,6 @@ export default function EditProcedurePage() {
     };
   }, [params.id]);
 
-  async function handleSubmit(values: ProcedureFormValues) {
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      await api(`/api/admin/procedures/${params.id}`, { method: 'PATCH', body: values });
-      router.push('/admin/procedures');
-    } catch (err) {
-      setSubmitError(apiErrorMessage(err, 'Impossible de mettre à jour la procédure.'));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   if (loadError) {
     return <p className="text-sm text-error-600">{loadError}</p>;
   }
@@ -72,6 +59,30 @@ export default function EditProcedurePage() {
     tagline: procedure.tagline,
     checklist: procedure.checklist,
   };
+
+  async function handleSubmit(values: ProcedureFormValues) {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      // Only PATCH the fields that actually changed — sending the full form
+      // every time makes logAdminAction's `{ fields: Object.keys(data) }`
+      // metadata meaningless (every edit would "touch" all 5 fields).
+      const body: Partial<ProcedureFormValues> = {};
+      if (values.name !== initialValues.name) body.name = values.name;
+      if (values.country !== initialValues.country) body.country = values.country;
+      if (values.field !== initialValues.field) body.field = values.field;
+      if (values.tagline !== initialValues.tagline) body.tagline = values.tagline;
+      if (JSON.stringify(values.checklist) !== JSON.stringify(initialValues.checklist)) {
+        body.checklist = values.checklist;
+      }
+      await api(`/api/admin/procedures/${params.id}`, { method: 'PATCH', body });
+      router.push('/admin/procedures');
+    } catch (err) {
+      setSubmitError(apiErrorMessage(err, 'Impossible de mettre à jour la procédure.'));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">

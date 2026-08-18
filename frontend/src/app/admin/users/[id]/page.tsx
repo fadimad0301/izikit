@@ -95,6 +95,10 @@ export default function AdminUserDetailPage() {
     return <p className="text-sm text-charcoal-900/60">Chargement…</p>;
   }
 
+  const procedureNames = new Map(
+    user.procedureAccess.map((pa) => [pa.procedure.id, pa.procedure.name]),
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <header>
@@ -149,6 +153,9 @@ export default function AdminUserDetailPage() {
               >
                 <div>
                   <span className="font-medium text-ink-900">{doc.filename}</span>
+                  <p className="mt-1 text-sm text-charcoal-900/60">
+                    {procedureNames.get(doc.procedureId) ?? doc.procedureId} · {doc.checklistItemId}
+                  </p>
                   <p className="mt-1 text-sm text-charcoal-900/60">
                     {new Date(doc.uploadedAt).toLocaleDateString('fr-FR')} ·{' '}
                     {Math.round(doc.sizeBytes / 1024)} Ko

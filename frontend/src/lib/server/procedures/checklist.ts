@@ -11,4 +11,9 @@ export const checklistItemSchema = z.object({
 });
 export type ChecklistItem = z.infer<typeof checklistItemSchema>;
 
-export const checklistSchema = z.array(checklistItemSchema);
+export const checklistSchema = z
+  .array(checklistItemSchema)
+  .min(1)
+  .refine((items) => new Set(items.map((item) => item.id)).size === items.length, {
+    message: 'checklist item ids must be unique',
+  });

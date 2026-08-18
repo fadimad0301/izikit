@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { Card, Badge, Button, Toggle } from '@/components/ui';
 
@@ -32,6 +33,7 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function AdminProceduresPage() {
+  const router = useRouter();
   const [procedures, setProcedures] = useState<AdminProcedure[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -83,9 +85,7 @@ export default function AdminProceduresPage() {
     <div className="flex flex-col gap-6">
       <header className="flex items-center justify-between gap-4">
         <h1 className="font-serif text-2xl text-ink-900">Procédures</h1>
-        <Link href="/admin/procedures/new">
-          <Button>Nouvelle procédure</Button>
-        </Link>
+        <Button onClick={() => router.push('/admin/procedures/new')}>Nouvelle procédure</Button>
       </header>
 
       {error && <p className="text-sm text-error-600">{error}</p>}

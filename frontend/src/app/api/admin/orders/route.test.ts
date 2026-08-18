@@ -74,6 +74,19 @@ describe('/api/admin/orders [Wave 1] — list', () => {
     });
   });
 
+  it('GET strips idempotencyBodyHash from metadata (internal replay fingerprint, not admin-facing)', async () => {
+    prismaMock.order.findMany.mockResolvedValueOnce([
+      seedOrder({
+        id: 'o1',
+        metadata: { tier: 'SIMPLE', procedureId: 'proc_1', idempotencyBodyHash: 'deadbeef' },
+      }),
+    ] as never);
+
+    const res = await GET(makeGet('http://test/api/admin/orders'));
+    const body = (await res.json()) as { items: Array<{ metadata: unknown }> };
+    expect(body.items[0]?.metadata).toEqual({ tier: 'SIMPLE', procedureId: 'proc_1' });
+  });
+
   it('GET returns empty 200 (never 404) on no rows', async () => {
     prismaMock.order.findMany.mockResolvedValueOnce([] as never);
     const res = await GET(makeGet('http://test/api/admin/orders'));

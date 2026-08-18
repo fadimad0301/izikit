@@ -143,6 +143,16 @@ describe('/api/admin/procedures — create', () => {
     expect(prismaMock.procedure.create).not.toHaveBeenCalled();
   });
 
+  it('POST returns 400 when the name slugifies to an empty string', async () => {
+    const res = await POST(
+      makePost('http://test/api/admin/procedures', { ...validBody, name: '🎉🎉🎉' }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('VALIDATION_FAILED');
+    expect(prismaMock.procedure.create).not.toHaveBeenCalled();
+  });
+
   it('POST checks CSRF before requireAdmin', async () => {
     mockVerifyCsrf.mockReturnValueOnce(
       NextResponse.json({ error: 'CSRF_INVALID' }, { status: 403 }),

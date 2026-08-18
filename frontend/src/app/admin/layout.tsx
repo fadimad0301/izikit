@@ -6,7 +6,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { api, ApiError } from '@/lib/api';
+import { api } from '@/lib/api';
 
 interface AdminMe {
   admin: { id: string; email: string; role: 'ADMIN' | 'SUPERADMIN' };
@@ -31,14 +31,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       try {
         const res = await api<AdminMe>('/api/admin/me');
         if (!cancelled) setAdmin(res.admin);
-      } catch (err) {
-        if (!cancelled) {
-          if (err instanceof ApiError) {
-            router.replace('/');
-          } else {
-            router.replace('/');
-          }
-        }
+      } catch {
+        if (!cancelled) router.replace('/');
       } finally {
         if (!cancelled) setChecked(true);
       }
