@@ -32,7 +32,7 @@ const PROCEDURE_DETAIL_SELECT = {
 const PatchBody = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   country: z.string().trim().min(1).max(100).optional(),
-  field: z.string().trim().min(1).max(100).optional(),
+  field: z.union([z.string().trim().min(1).max(100), z.literal('')]).optional(),
   tagline: z.string().trim().min(1).max(300).optional(),
   checklist: checklistSchema.optional(),
   isArchived: z.boolean().optional(),
@@ -91,7 +91,7 @@ export async function PATCH(
     const parsed = PatchBody.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'VALIDATION_FAILED', message: 'Invalid request body' },
+        { error: 'VALIDATION_FAILED', message: 'Corps de requête invalide.' },
         { status: 400, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
@@ -106,7 +106,9 @@ export async function PATCH(
     const data: Prisma.ProcedureUpdateInput = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
     if (parsed.data.country !== undefined) data.country = parsed.data.country;
-    if (parsed.data.field !== undefined) data.field = parsed.data.field;
+    if (parsed.data.field !== undefined) {
+      data.field = parsed.data.field === '' ? null : parsed.data.field;
+    }
     if (parsed.data.tagline !== undefined) data.tagline = parsed.data.tagline;
     if (parsed.data.checklist !== undefined) {
       data.checklist = parsed.data.checklist as unknown as Prisma.InputJsonValue;
@@ -115,9 +117,37 @@ export async function PATCH(
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json(
-        { error: 'VALIDATION_FAILED', message: 'At least one field required' },
+        { error: 'VALIDATION_FAILED', message: 'Aucun champ à mettre à jour.' },
         { status: 400, headers: { 'x-request-id': reqCtx.requestId } },
       );
+    }
+
+    // Guard against silently orphaning a buyer's already-uploaded document:
+    // ProcedureDocument.checklistItemId references a checklist item's `id`
+    // by value (frontend/src/lib/server/procedures/checklist.ts). If the new
+    // checklist drops or renames an id that an existing document points to,
+    // that document becomes unreachable by the dossier-status computation
+    // (GET /api/procedures/[slug], GET /api/procedures/mine). Refuse the
+    // update instead of applying it.
+    if (parsed.data.checklist !== undefined) {
+      const newItemIds = new Set(parsed.data.checklist.map((item) => item.id));
+      const existingDocs = await prisma.procedureDocument.findMany({
+        where: { procedureId: id },
+        select: { checklistItemId: true },
+        distinct: ['checklistItemId'],
+      });
+      const orphaned = existingDocs
+        .map((d) => d.checklistItemId)
+        .filter((itemId) => !newItemIds.has(itemId));
+      if (orphaned.length > 0) {
+        return NextResponse.json(
+          {
+            error: 'CHECKLIST_ITEM_HAS_DOCUMENTS',
+            message: `Impossible de modifier la checklist : des documents ont déjà été déposés pour ${orphaned.join(', ')}.`,
+          },
+          { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
+        );
+      }
     }
 
     let updated;

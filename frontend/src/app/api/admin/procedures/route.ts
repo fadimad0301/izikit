@@ -32,7 +32,7 @@ const PROCEDURE_LIST_SELECT = {
 const CreateBody = z.object({
   name: z.string().trim().min(1).max(200),
   country: z.string().trim().min(1).max(100),
-  field: z.string().trim().min(1).max(100).optional(),
+  field: z.union([z.string().trim().min(1).max(100), z.literal('')]).optional(),
   tagline: z.string().trim().min(1).max(300),
   checklist: checklistSchema,
 });
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const parsed = CreateBody.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'VALIDATION_FAILED', message: 'Invalid request body' },
+        { error: 'VALIDATION_FAILED', message: 'Corps de requête invalide.' },
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
     }
@@ -101,7 +101,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           // rejects assigning explicit `undefined` to Prisma's `field?: string
           // | null` input type. Omitting the key entirely is required, not
           // just an assignment of undefined to it.
-          ...(parsed.data.field !== undefined ? { field: parsed.data.field } : {}),
+          ...(parsed.data.field !== undefined
+            ? { field: parsed.data.field === '' ? null : parsed.data.field }
+            : {}),
           tagline: parsed.data.tagline,
           checklist: parsed.data.checklist as unknown as Prisma.InputJsonValue,
           slug: candidate,

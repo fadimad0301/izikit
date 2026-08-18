@@ -164,4 +164,49 @@ describe('/api/admin/procedures/[id] — edit', () => {
     expect(res.status).toBe(403);
     expect(mockRequireAdmin).not.toHaveBeenCalled();
   });
+
+  it('PATCH rejects a checklist that drops an item with an existing document — 409', async () => {
+    prismaMock.procedureDocument.findMany.mockResolvedValueOnce([
+      { checklistItemId: 'passport' },
+    ] as never);
+
+    const res = await PATCH(
+      makePatch('http://test/api/admin/procedures/p1', {
+        checklist: [{ id: 'visa-form', title: 'Formulaire de visa' }],
+      }),
+      params('p1'),
+    );
+
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('CHECKLIST_ITEM_HAS_DOCUMENTS');
+    expect(prismaMock.procedure.update).not.toHaveBeenCalled();
+  });
+
+  it('PATCH accepts a checklist that keeps all existing-document item ids (reordered/extended)', async () => {
+    prismaMock.procedureDocument.findMany.mockResolvedValueOnce([
+      { checklistItemId: 'passport' },
+    ] as never);
+    const proc = seedProcedure({ id: 'p1' });
+    prismaMock.procedure.update.mockResolvedValueOnce({
+      ...proc,
+      checklist: [
+        { id: 'visa-form', title: 'Formulaire de visa' },
+        { id: 'passport', title: 'Copie du passeport' },
+      ],
+    } as never);
+
+    const res = await PATCH(
+      makePatch('http://test/api/admin/procedures/p1', {
+        checklist: [
+          { id: 'visa-form', title: 'Formulaire de visa' },
+          { id: 'passport', title: 'Copie du passeport' },
+        ],
+      }),
+      params('p1'),
+    );
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.procedure.update).toHaveBeenCalledTimes(1);
+  });
 });

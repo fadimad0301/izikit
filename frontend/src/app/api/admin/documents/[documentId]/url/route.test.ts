@@ -60,6 +60,8 @@ describe('/api/admin/documents/[documentId]/url', () => {
     expect(body.url).toBe('https://res.cloudinary.com/signed/test-url');
     expect(typeof body.expiresAt).toBe('string');
 
+    expect(mockRequireAdmin).toHaveBeenCalledWith('ADMIN');
+
     expect(mockLogAdminAction).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

@@ -64,10 +64,23 @@ export default function AdminUserDetailPage() {
   async function viewDocument(documentId: string) {
     setDocError(null);
     setViewingDocId(documentId);
+    // Open the tab synchronously on the click, before the `await` — by the
+    // time the fetch resolves the browser may have lost the "this came from
+    // a direct user gesture" signal and silently block a popup opened here,
+    // with no visible error. We instead point the pre-opened tab's location
+    // once the signed URL arrives.
+    const win = window.open('', '_blank', 'noopener,noreferrer');
     try {
       const res = await api<{ url: string }>(`/api/admin/documents/${documentId}/url`);
-      window.open(res.url, '_blank', 'noopener,noreferrer');
+      if (win) {
+        win.location.href = res.url;
+      } else {
+        setDocError(
+          "Le navigateur a bloqué l'ouverture du document. Autorise les popups pour ce site.",
+        );
+      }
     } catch (err) {
+      if (win) win.close();
       setDocError(apiErrorMessage(err, "Impossible d'ouvrir le document."));
     } finally {
       setViewingDocId(null);
