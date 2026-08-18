@@ -40,6 +40,30 @@ describe('GET /api/procedures/[slug]', () => {
     expect(res.status).toBe(404);
   });
 
+  it('returns 404 for an archived procedure when the caller has no access', async () => {
+    prismaMock.procedure.findUnique.mockResolvedValue({
+      ...PROCEDURE_ROW,
+      isArchived: true,
+    } as never);
+    const res = await GET(makeGet(), ctxFor('campus-france'));
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe('PROCEDURE_NOT_FOUND');
+  });
+
+  it('still returns 200 for an archived procedure when the caller already holds access', async () => {
+    prismaMock.procedure.findUnique.mockResolvedValue({
+      ...PROCEDURE_ROW,
+      isArchived: true,
+    } as never);
+    mockOptionalAuth.mockResolvedValue({ user: { sub: 'user-1', email: 'me@example.com' } });
+    prismaMock.procedureAccess.findUnique.mockResolvedValue({ tier: 'SIMPLE' } as never);
+    const res = await GET(makeGet(), ctxFor('campus-france'));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.hasAccess).toBe(true);
+  });
+
   it('omits checklist and returns hasAccess:false for an anonymous caller', async () => {
     prismaMock.procedure.findUnique.mockResolvedValue(PROCEDURE_ROW as never);
     const res = await GET(makeGet(), ctxFor('campus-france'));

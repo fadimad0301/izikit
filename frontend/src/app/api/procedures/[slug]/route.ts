@@ -27,6 +27,7 @@ const PROCEDURE_DETAIL_SELECT = {
   field: true,
   tagline: true,
   checklist: true,
+  isArchived: true,
 } satisfies Prisma.ProcedureSelect;
 
 type Tier = 'SIMPLE' | 'COMPLET';
@@ -60,6 +61,18 @@ export async function GET(
       tier = (access?.tier as Tier | undefined) ?? null;
     }
     const hasAccess = tier !== null;
+
+    // An archived procedure stays reachable for buyers who already hold
+    // access (their dossier-status page still needs it), but a direct-link
+    // browser/checkout attempt gets the same 404 as an unknown slug — this
+    // is what keeps GET /api/procedures/[slug] + POST /api/orders from
+    // being usable to purchase something no longer in the public catalog.
+    if (procedure.isArchived && !hasAccess) {
+      return NextResponse.json(
+        { error: 'PROCEDURE_NOT_FOUND', message: 'Procédure introuvable.' },
+        { status: 404, headers: { 'x-request-id': reqCtx.requestId } },
+      );
+    }
 
     let uploadedByItem = new Map<string, string>();
     if (auth && tier === 'COMPLET') {

@@ -193,6 +193,56 @@ describe('POST /api/orders [Wave 1] — happy path', () => {
   });
 });
 
+describe('POST /api/orders — archived procedure guard', () => {
+  it('rejects an order for an archived procedureId with 404 PROCEDURE_NOT_FOUND', async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null as never);
+    prismaMock.procedure.findUnique.mockResolvedValue({ isArchived: true } as never);
+
+    const res = await POST(
+      makePost(
+        { amount: 5000, currency: 'XOF', metadata: { procedureId: 'proc_archived' } },
+        { idempotencyKey: 'idem-archived-1' },
+      ),
+    );
+
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe('PROCEDURE_NOT_FOUND');
+    expect(prismaMock.order.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an order for an unknown procedureId with 404 PROCEDURE_NOT_FOUND', async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null as never);
+    prismaMock.procedure.findUnique.mockResolvedValue(null as never);
+
+    const res = await POST(
+      makePost(
+        { amount: 5000, currency: 'XOF', metadata: { procedureId: 'proc_unknown' } },
+        { idempotencyKey: 'idem-unknown-1' },
+      ),
+    );
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.order.create).not.toHaveBeenCalled();
+  });
+
+  it('allows an order for a non-archived procedureId', async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null as never);
+    prismaMock.procedure.findUnique.mockResolvedValue({ isArchived: false } as never);
+    prismaMock.order.create.mockResolvedValue(seededOrder() as never);
+    prismaMock.order.update.mockResolvedValue(seededOrder() as never);
+
+    const res = await POST(
+      makePost(
+        { amount: 5000, currency: 'XOF', metadata: { procedureId: 'proc_active' } },
+        { idempotencyKey: 'idem-active-1' },
+      ),
+    );
+
+    expect(res.status).toBe(201);
+  });
+});
+
 describe('POST /api/orders [Wave 1] — idempotency', () => {
   it('POST replays returns prior order on same Idempotency-Key', async () => {
     // Existing PENDING order with same idempotency key

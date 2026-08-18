@@ -6,6 +6,8 @@
 //   3. Idempotency-Key header     — D-PAY-01 (Stripe-grade replay)
 //   4. Replay branch              — Pitfall 3 (replay outcome, not row)
 //   5. Zod parse body             — D-PAY-04
+//   5b. metadata.procedureId archived/unknown check — Doxi (blocks buying
+//       something no longer in the public catalog; see procedures/[slug])
 //   6. getProvider() lazy init    — Pitfall 7 (503 not 500 on missing env)
 //   7. Insert PENDING Order row   — stable externalRef for the charge call
 //   8. breaker.execute(provider.charge) — D-PAY-02 (single-instance breaker)
@@ -18,6 +20,7 @@
 //   replay body mismatch     → 422 IDEMPOTENCY_KEY_BODY_MISMATCH (CR-02)
 //   replay FAILED/EXPIRED/REFUNDED → 503 PAYMENT_PROVIDER_UNAVAILABLE
 //   Zod failure              → 400 VALIDATION_FAILED
+//   archived/unknown procedureId → 404 PROCEDURE_NOT_FOUND
 //   missing BICTORYS_* env   → 503 PAYMENT_PROVIDER_UNCONFIGURED
 //   CircuitOpenError         → 503 PAYMENT_PROVIDER_UNAVAILABLE + Retry-After
 //   provider.charge throw    → 502 PAYMENT_FAILED (breaker has counted it)
@@ -80,6 +83,13 @@ const Body = z.object({
 });
 
 const ORDER_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24h PENDING window
+
+// Doxi — recognized shape of a procedure-purchase Order's metadata. Mirrors
+// the schema the Bictorys webhook handler parses on the paid side
+// (frontend/src/app/api/webhooks/bictorys/route.ts). Only orders that carry
+// a procedureId need the archived check below; orders for other products
+// (future tiers, etc.) don't set this key and skip it.
+const OrderMetadata = z.object({ procedureId: z.string().optional() });
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -209,6 +219,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         },
         { status: 503, headers: { 'x-request-id': ctx.requestId } },
       );
+    }
+
+    // 5b. Doxi — reject a *new* purchase of an archived procedure. Existing
+    // buyers keep their ProcedureAccess untouched (this only guards order
+    // creation); an admin archiving a procedure just stops it from being
+    // browsable/purchasable going forward. Same 404 shape as an unknown
+    // slug on GET /api/procedures/[slug] so a client can't distinguish
+    // "archived" from "never existed".
+    const meta = OrderMetadata.safeParse(parsed.data.metadata);
+    if (meta.success && meta.data.procedureId) {
+      const procedure = await prisma.procedure.findUnique({
+        where: { id: meta.data.procedureId },
+        select: { isArchived: true },
+      });
+      if (!procedure || procedure.isArchived) {
+        return NextResponse.json(
+          { error: 'PROCEDURE_NOT_FOUND', message: 'Procédure introuvable.' },
+          { status: 404, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
     }
 
     // 6. Lazy provider init (Pitfall 7 — translate to 503, never 500)
