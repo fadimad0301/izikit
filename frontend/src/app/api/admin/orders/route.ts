@@ -17,6 +17,7 @@ import { prisma } from '@/lib/server/prisma';
 import { clampLimit, cursorWhere, buildPage, decodeCursor } from '@/lib/server/pagination/paginate';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { sanitizeMetadata } from '@/lib/server/orders/sanitize-metadata';
 
 const ORDER_SELECT = {
   id: true,
@@ -39,19 +40,6 @@ function parseDate(raw: string | null): Date | null {
   if (!raw) return null;
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? null : d;
-}
-
-// `idempotencyBodyHash` (CR-02, POST /api/orders) is an internal replay
-// fingerprint, not a domain field — strip it before it reaches the admin UI.
-function sanitizeMetadata(metadata: Prisma.JsonValue): Prisma.JsonValue {
-  if (metadata === null || typeof metadata !== 'object' || Array.isArray(metadata)) {
-    return metadata;
-  }
-  return Object.fromEntries(
-    Object.entries(metadata as Record<string, unknown>).filter(
-      ([key]) => key !== 'idempotencyBodyHash',
-    ),
-  ) as Prisma.JsonValue;
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {

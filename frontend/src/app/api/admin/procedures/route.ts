@@ -15,7 +15,7 @@ import { logAdminAction } from '@/lib/server/admin/audit';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { clampLimit, cursorWhere, buildPage, decodeCursor } from '@/lib/server/pagination/paginate';
-import { checklistSchema } from '@/lib/server/procedures/checklist';
+import { checklistWriteSchema } from '@/lib/server/procedures/checklist';
 import { slugify, ensureUniqueSlug } from '@/lib/server/slug';
 
 const PROCEDURE_LIST_SELECT = {
@@ -34,7 +34,7 @@ const CreateBody = z.object({
   country: z.string().trim().min(1).max(100),
   field: z.union([z.string().trim().min(1).max(100), z.literal('')]).optional(),
   tagline: z.string().trim().min(1).max(300),
-  checklist: checklistSchema,
+  checklist: checklistWriteSchema,
 });
 
 export async function GET(req: NextRequest): Promise<NextResponse> {

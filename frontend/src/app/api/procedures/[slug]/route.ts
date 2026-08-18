@@ -83,10 +83,21 @@ export async function GET(
       uploadedByItem = new Map(docs.map((d) => [d.checklistItemId, d.filename]));
     }
 
-    const { checklist, ...publicFields } = procedure;
+    // Allowlist, not a destructure-exclude — `isArchived` is only in
+    // PROCEDURE_DETAIL_SELECT for the archived-guard check above; it must
+    // never reach the public response (would otherwise ride along silently
+    // if the select ever grows another internal-only field).
+    const publicFields = {
+      id: procedure.id,
+      slug: procedure.slug,
+      name: procedure.name,
+      country: procedure.country,
+      field: procedure.field,
+      tagline: procedure.tagline,
+    };
     let checklistResponse: unknown[] | undefined;
     if (hasAccess) {
-      const parsedChecklist = checklistSchema.safeParse(checklist);
+      const parsedChecklist = checklistSchema.safeParse(procedure.checklist);
       if (!parsedChecklist.success) {
         log.warn('procedure checklist failed to validate — likely not re-seeded after migration', {
           procedureId: procedure.id,

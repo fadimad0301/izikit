@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checklistItemSchema, checklistSchema } from './checklist';
+import { checklistItemSchema, checklistSchema, checklistWriteSchema } from './checklist';
 
 describe('checklistItemSchema', () => {
   it('accepts an item with id, title, and description', () => {
@@ -22,7 +22,7 @@ describe('checklistItemSchema', () => {
   });
 });
 
-describe('checklistSchema', () => {
+describe('checklistSchema (lenient — read-time re-parse of persisted data)', () => {
   it('accepts an array of valid items', () => {
     const result = checklistSchema.safeParse([
       { id: 'a', title: 'A' },
@@ -31,13 +31,36 @@ describe('checklistSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects an empty array', () => {
+  it('accepts an empty array (pre-existing rows must not start 500ing on read)', () => {
     const result = checklistSchema.safeParse([]);
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts duplicate item ids (pre-existing rows must not start 500ing on read)', () => {
+    const result = checklistSchema.safeParse([
+      { id: 'a', title: 'A' },
+      { id: 'a', title: 'A bis' },
+    ]);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('checklistWriteSchema (strict — admin create/edit boundary)', () => {
+  it('accepts an array of valid items', () => {
+    const result = checklistWriteSchema.safeParse([
+      { id: 'a', title: 'A' },
+      { id: 'b', title: 'B', description: 'desc' },
+    ]);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty array', () => {
+    const result = checklistWriteSchema.safeParse([]);
     expect(result.success).toBe(false);
   });
 
   it('rejects duplicate item ids', () => {
-    const result = checklistSchema.safeParse([
+    const result = checklistWriteSchema.safeParse([
       { id: 'a', title: 'A' },
       { id: 'a', title: 'A bis' },
     ]);

@@ -62,6 +62,17 @@ describe('GET /api/procedures/[slug]', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.hasAccess).toBe(true);
+    expect(body).not.toHaveProperty('isArchived');
+  });
+
+  it('never leaks isArchived to the public response', async () => {
+    prismaMock.procedure.findUnique.mockResolvedValue({
+      ...PROCEDURE_ROW,
+      isArchived: false,
+    } as never);
+    const res = await GET(makeGet(), ctxFor('campus-france'));
+    const body = await res.json();
+    expect(body).not.toHaveProperty('isArchived');
   });
 
   it('omits checklist and returns hasAccess:false for an anonymous caller', async () => {

@@ -75,7 +75,12 @@ export default function EditProcedurePage() {
       if (JSON.stringify(values.checklist) !== JSON.stringify(initialValues.checklist)) {
         body.checklist = values.checklist;
       }
-      await api(`/api/admin/procedures/${params.id}`, { method: 'PATCH', body });
+      // Nothing changed — skip the round trip entirely rather than send an
+      // empty PATCH body, which the API correctly rejects with 400 "Aucun
+      // champ à mettre à jour." A no-op save should still feel like success.
+      if (Object.keys(body).length > 0) {
+        await api(`/api/admin/procedures/${params.id}`, { method: 'PATCH', body });
+      }
       router.push('/admin/procedures');
     } catch (err) {
       setSubmitError(apiErrorMessage(err, 'Impossible de mettre à jour la procédure.'));

@@ -14,7 +14,7 @@ import { prisma } from '@/lib/server/prisma';
 import { logAdminAction } from '@/lib/server/admin/audit';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
-import { checklistSchema } from '@/lib/server/procedures/checklist';
+import { checklistWriteSchema } from '@/lib/server/procedures/checklist';
 
 const PROCEDURE_DETAIL_SELECT = {
   id: true,
@@ -34,7 +34,7 @@ const PatchBody = z.object({
   country: z.string().trim().min(1).max(100).optional(),
   field: z.union([z.string().trim().min(1).max(100), z.literal('')]).optional(),
   tagline: z.string().trim().min(1).max(300).optional(),
-  checklist: checklistSchema.optional(),
+  checklist: checklistWriteSchema.optional(),
   isArchived: z.boolean().optional(),
 });
 // No `.refine()` for "at least one field" here — Zod's object parser sets

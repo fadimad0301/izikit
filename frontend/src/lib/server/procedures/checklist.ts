@@ -11,8 +11,18 @@ export const checklistItemSchema = z.object({
 });
 export type ChecklistItem = z.infer<typeof checklistItemSchema>;
 
-export const checklistSchema = z
-  .array(checklistItemSchema)
+// Lenient — used to re-parse already-persisted checklist JSON at read time
+// (GET /api/procedures/[slug], /mine, [slug]/documents). Must accept
+// whatever was legal to store historically, or a row seeded/saved before
+// checklistWriteSchema below existed would start 500ing on every view.
+export const checklistSchema = z.array(checklistItemSchema);
+
+// Strict — used only at the admin create/edit write boundary (POST/PATCH
+// /api/admin/procedures). Empty checklists and duplicate item ids were
+// never desirable, but tightening the shared `checklistSchema` symbol
+// directly once made it also reject pre-existing rows on read; keep the
+// stricter rule on its own name instead.
+export const checklistWriteSchema = checklistSchema
   .min(1)
   .refine((items) => new Set(items.map((item) => item.id)).size === items.length, {
     message: 'checklist item ids must be unique',

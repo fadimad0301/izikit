@@ -70,4 +70,18 @@ describe('GET /api/orders/[id]', () => {
       metadata: { tier: 'SIMPLE', procedureId: 'proc_1', procedureSlug: 'campus-france' },
     });
   });
+
+  it('strips idempotencyBodyHash from metadata (internal replay fingerprint, not buyer-facing)', async () => {
+    prismaMock.order.findUnique.mockResolvedValue({
+      id: 'order_1',
+      userId: 'user-1',
+      status: 'PAID',
+      amount: 5000,
+      currency: 'XOF',
+      metadata: { tier: 'SIMPLE', procedureId: 'proc_1', idempotencyBodyHash: 'deadbeef' },
+    } as never);
+    const res = await GET(makeGet(), ctxFor('order_1'));
+    const body = await res.json();
+    expect(body.metadata).toEqual({ tier: 'SIMPLE', procedureId: 'proc_1' });
+  });
 });

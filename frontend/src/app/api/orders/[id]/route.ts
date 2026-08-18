@@ -9,6 +9,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { sanitizeMetadata } from '@/lib/server/orders/sanitize-metadata';
 
 export async function GET(
   req: NextRequest,
@@ -36,7 +37,7 @@ export async function GET(
         status: order.status,
         amount: order.amount,
         currency: order.currency,
-        metadata: order.metadata,
+        metadata: sanitizeMetadata(order.metadata),
       },
       { status: 200, headers: { 'x-request-id': reqCtx.requestId } },
     );
