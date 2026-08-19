@@ -130,7 +130,6 @@ describe('/api/admin/users [Wave 1] — list', () => {
     expect(body.nextCursor).toBeNull();
     // PII whitelist: passwordHash etc. must NOT appear
     expect(body.items[0]).not.toHaveProperty('passwordHash');
-    expect(body.items[0]).not.toHaveProperty('withdrawalPinHash');
     expect(body.items[0]).not.toHaveProperty('tokenVersion');
     // findMany was called with createdAt+id ordering and select whitelist
     const args = prismaMock.user.findMany.mock.calls[0]?.[0];

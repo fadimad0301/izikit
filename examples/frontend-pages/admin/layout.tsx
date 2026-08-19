@@ -18,7 +18,6 @@ interface AdminMe {
 const NAV = [
   { href: '/admin/users', label: 'Users' },
   { href: '/admin/orders', label: 'Orders' },
-  { href: '/admin/withdrawals', label: 'Withdrawals' },
   { href: '/admin/audit-log', label: 'Audit log' },
 ];
 

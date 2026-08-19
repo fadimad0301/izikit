@@ -14,7 +14,7 @@
         "models": ["Order"],
         "envVars": ["BICTORYS_API_KEY", "BICTORYS_API_URL", "COMMISSION_RATE_BP"]
       },
-      "cross_dependencies": ["notifications", "email-resend", "webhooks-bictorys", "withdrawals"],
+      "cross_dependencies": ["notifications", "email-resend", "webhooks-bictorys"],
       "surgical_edits": [
         {
           "file": "frontend/src/lib/server/outbox/dispatcher.ts",
@@ -35,37 +35,6 @@
       "tripwires_to_update": [
         "frontend/src/lib/server/observability/vercel-json-shape.test.ts (remove order-expiration assertion)"
       ]
-    },
-
-    "withdrawals": {
-      "description": "User withdrawals with PIN + advisory lock + balance guards",
-      "prune_complexity": "with-care",
-      "owns": {
-        "routes": ["api/withdrawals", "api/auth/withdrawal-pin"],
-        "libs": ["withdrawals/", "auth/pin.ts"],
-        "models": ["Withdrawal"],
-        "envVars": [
-          "WITHDRAWAL_MIN_AMOUNT",
-          "WITHDRAWAL_MAX_AMOUNT",
-          "WITHDRAWAL_DAILY_LIMIT",
-          "WITHDRAWAL_COOLDOWN_HOURS",
-          "WITHDRAWAL_REQUIRE_PIN",
-          "WITHDRAWAL_BALANCE_CHECK",
-          "BICTORYS_PRIVATE_KEY",
-          "BICTORYS_MERCHANT_SECRET_CODE"
-        ]
-      },
-      "cross_dependencies": ["payments-bictorys", "notifications", "admin-backoffice"],
-      "surgical_edits": [
-        {
-          "file": "frontend/src/lib/server/notifications/templates.ts",
-          "action": "remove withdrawalRequested template if defined"
-        }
-      ],
-      "cron_entries": [],
-      "prisma_user_relations": ["withdrawals Withdrawal[]", "withdrawalPinHash String?"],
-      "outbox_event_kinds": [],
-      "tripwires_to_update": []
     },
 
     "webhooks-bictorys": {
@@ -172,7 +141,7 @@
     "notifications": {
       "description": "In-app notifications (list, mark-read, count, prefs)",
       "prune_complexity": "with-care",
-      "$prune_complexity_reason": "Tightly coupled to OAuth callback (welcomeNotification), withdrawals route (withdrawalRequested), outbox dispatcher (notification.payment_received). Pruning requires editing 3+ caller routes. Most projects keep notifications even if they don't render them in UI.",
+      "$prune_complexity_reason": "Tightly coupled to OAuth callback (welcomeNotification) and the outbox dispatcher (notification.payment_received). Pruning requires editing 2+ caller routes. Most projects keep notifications even if they don't render them in UI.",
       "owns": {
         "routes": ["api/notifications"],
         "libs": ["notifications/"],
@@ -184,10 +153,6 @@
         {
           "file": "frontend/src/app/api/auth/oauth/google/callback/route.ts",
           "action": "remove createNotification(welcomeNotification(...)) call + import"
-        },
-        {
-          "file": "frontend/src/app/api/withdrawals/route.ts",
-          "action": "remove createNotification(...) call + import (post-commit notification)"
         },
         {
           "file": "frontend/src/lib/server/outbox/dispatcher.ts",
@@ -208,7 +173,7 @@
     },
 
     "admin-backoffice": {
-      "description": "Admin back-office (users / orders / withdrawals / audit-log / outbox / email-queue / rate-limits)",
+      "description": "Admin back-office (users / orders / audit-log / outbox / email-queue / rate-limits)",
       "prune_complexity": "safe",
       "owns": {
         "routes": ["api/admin"],

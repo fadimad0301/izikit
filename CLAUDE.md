@@ -2,13 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> ⚠️ **Do NOT run `/init` on this project.** This CLAUDE.md is shipped with the starter and contains battle-tested invariants (runtime=nodejs enforcement, protected file list, OAuth refusal of `email_verified=false`, advisory-lock withdrawals, outbox pattern, raw-body HMAC ordering, …). Running `/init` would regenerate this file from the codebase and erase those invariants. Claude Code already loads this file automatically at session start — no command needed.
+> ⚠️ **Do NOT run `/init` on this project.** This CLAUDE.md is shipped with the starter and contains battle-tested invariants (runtime=nodejs enforcement, protected file list, OAuth refusal of `email_verified=false`, outbox pattern, raw-body HMAC ordering, …). Running `/init` would regenerate this file from the codebase and erase those invariants. Claude Code already loads this file automatically at session start — no command needed.
 
 ## What this project is
 
 **A v1-shipped, headless Next.js 16 monolith starter.** Single full-stack app (App Router API Route Handlers + Server Actions + Prisma 5 + Neon + Upstash + Cloudinary + Resend + Bictorys + Sentry). There is no separate Express backend anymore — server logic lives under `frontend/src/app/api/*` and `frontend/src/lib/server/*`. The app **ships only logic** — no UI components — so each fork designs its own UX.
 
-Origin: bootstrapped from `amadou-template` (the legacy monorepo predecessor) on 2026-05-07; the port to a single Next.js 16 app shipped through 7 phases (auth → OAuth/notifs → admin → uploads/withdrawals → webhooks/cron → docs/tests → final pass). 555/555 unit tests green (the storage swap dropped the now-obsolete `/api/files/[...key]` proxy tests).
+Origin: bootstrapped from `amadou-template` (the legacy monorepo predecessor) on 2026-05-07; the port to a single Next.js 16 app shipped through 7 phases (auth → OAuth/notifs → admin → uploads → webhooks/cron → docs/tests → final pass). 555/555 unit tests green (the storage swap dropped the now-obsolete `/api/files/[...key]` proxy tests). The withdrawals feature (PIN-gated payouts) was pruned — Doxi never triggers withdrawals; see `git log --grep prune` for the removal commit.
 
 **For an AI agent picking up this repo:** the architecture sections below describe what's already been built. Anything not listed under "Files Claude must NOT modify" is fair game to extend, refactor, or replace per your fork's needs — that's the point of a starter. The protected list is the small set of files where the invariants are subtle (refresh-token races, HMAC integrity, advisory locks…); everything else is the fork's surface area.
 
@@ -59,11 +59,9 @@ Integration tests are deferred (no formal harness in v1) — `pnpm smoke:auth` p
 
 **Middleware HOFs** ([frontend/src/lib/server/middleware/index.ts](frontend/src/lib/server/middleware/index.ts)) — `requireAuth` / `requireAdmin` / `requireSuperadmin` / `requireOrgRole` / `optionalAuth` each return `Context | NextResponse`. Pattern in handlers: `if (auth instanceof NextResponse) return auth;`.
 
-**Frontend `api()` wrapper** ([frontend/src/lib/api.ts](frontend/src/lib/api.ts)): auto-refreshes on 401 with a single-flight lock, attaches CSRF, and **only retries `GET`/`HEAD` on network errors** — never mutating verbs (would risk duplicate charges/withdrawals). `ApiError.code` exposes the server's stable error code (e.g. `PIN_REQUIRED`, `INSUFFICIENT_BALANCE`) — switch on `.code`, not on `.message`.
+**Frontend `api()` wrapper** ([frontend/src/lib/api.ts](frontend/src/lib/api.ts)): auto-refreshes on 401 with a single-flight lock, attaches CSRF, and **only retries `GET`/`HEAD` on network errors** — never mutating verbs (would risk duplicate charges). `ApiError.code` exposes the server's stable error code (e.g. `PAYMENT_PROVIDER_UNAVAILABLE`, `VALIDATION_FAILED`) — switch on `.code`, not on `.message`.
 
 **Webhook idempotency + outbox:** [frontend/src/lib/server/webhook/handler.ts](frontend/src/lib/server/webhook/handler.ts) returns `(NextRequest) => Promise<NextResponse>` and reads the raw body via `await req.arrayBuffer()` (preserves byte-identical HMAC). The handler runs a `Serializable` Prisma transaction with `WebhookLog @@unique([externalId, eventType])` for dedup. Side-effects (emails, notifications) must NOT run as a postCommit closure — they go to the **outbox** ([frontend/src/lib/server/outbox/](frontend/src/lib/server/outbox/)) inside the same tx, drained by a Vercel Cron route ([frontend/src/app/api/cron/outbox-drain/route.ts](frontend/src/app/api/cron/outbox-drain/route.ts), every 1 min).
-
-**Withdrawals are race-free:** the route runs guards + PENDING insert inside a `Serializable` Prisma transaction guarded by `pg_advisory_xact_lock(hashtext(userId))` ([frontend/src/lib/server/withdrawals/lock.ts](frontend/src/lib/server/withdrawals/lock.ts)). Two concurrent attempts for the same user serialize on the lock, so the second one sees the first's PENDING reservation and is correctly rejected as `INSUFFICIENT_BALANCE`.
 
 **Payments are pluggable** behind the `PaymentProvider` interface ([frontend/src/lib/server/payments/](frontend/src/lib/server/payments/)). Bictorys is the default. A single in-memory `CircuitBreaker` guards charge calls. Webhook replay window defaults to 60s (`BICTORYS_WEBHOOK_REPLAY_WINDOW_MS` to override).
 
@@ -71,9 +69,9 @@ Integration tests are deferred (no formal harness in v1) — `pnpm smoke:auth` p
 
 **Google OAuth (Sign in with Google)** — [frontend/src/lib/server/oauth/google.ts](frontend/src/lib/server/oauth/google.ts) + Phase 2 route handlers under `frontend/src/app/api/auth/oauth/google/{start,callback}/route.ts`. Implemented with `arctic` (OAuth 2.0 + PKCE). `start` issues state + PKCE-verifier cookies (5min, path-scoped to `/api/auth/oauth`) and 302s to Google. `callback` validates state, exchanges code, decodes ID token, refuses unverified emails, find-or-create user with account linking by email, then issues our standard auth cookies. Frontend errors land on `/auth/error?code=…` (see [examples/frontend-pages/auth-error.tsx](examples/frontend-pages/auth-error.tsx)). Inert without `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI`.
 
-**Multi-tenancy is opt-in.** [frontend/src/lib/server/middleware/require-org-role.ts](frontend/src/lib/server/middleware/require-org-role.ts) ships role types + rank helpers (`OWNER` > `ADMIN` > `MEMBER`). Default project surface stays user-owned (`Order.userId`, `Withdrawal.userId`). Apps that need orgs add `organizationId String?` on their domain models case by case and gate routes via `requireOrgRole('ADMIN', 'orgId')` from the middleware HOFs. Owner promotion is transactional (3 ops in a single tx). Non-members get **404, not 403**, to avoid leaking org existence.
+**Multi-tenancy is opt-in.** [frontend/src/lib/server/middleware/require-org-role.ts](frontend/src/lib/server/middleware/require-org-role.ts) ships role types + rank helpers (`OWNER` > `ADMIN` > `MEMBER`). Default project surface stays user-owned (`Order.userId`). Apps that need orgs add `organizationId String?` on their domain models case by case and gate routes via `requireOrgRole('ADMIN', 'orgId')` from the middleware HOFs. Owner promotion is transactional (3 ops in a single tx). Non-members get **404, not 403**, to avoid leaking org existence.
 
-**Admin back-office** — [frontend/src/lib/server/admin/audit.ts](frontend/src/lib/server/admin/audit.ts) + [frontend/src/lib/server/middleware/require-admin.ts](frontend/src/lib/server/middleware/require-admin.ts). App-wide role on `User` (`USER` < `ADMIN` < `SUPERADMIN`). Phase-5 endpoints under `/api/admin/*` cover users (search/detail/role-change), orders (filter), withdrawals (filter + manual cancel), audit-log (paginated/filterable), and `/me` (admin probe). Every mutation calls `logAdminAction(prisma, {...})` → `AdminAction` row so we can answer "who did what when" during incidents. Bootstrap the first SUPERADMIN with `pnpm db:make-superadmin <email>` (the script lives at [frontend/scripts/make-superadmin.ts](frontend/scripts/make-superadmin.ts)).
+**Admin back-office** — [frontend/src/lib/server/admin/audit.ts](frontend/src/lib/server/admin/audit.ts) + [frontend/src/lib/server/middleware/require-admin.ts](frontend/src/lib/server/middleware/require-admin.ts). App-wide role on `User` (`USER` < `ADMIN` < `SUPERADMIN`). Phase-5 endpoints under `/api/admin/*` cover users (search/detail/role-change), orders (filter), audit-log (paginated/filterable), and `/me` (admin probe). Every mutation calls `logAdminAction(prisma, {...})` → `AdminAction` row so we can answer "who did what when" during incidents. Bootstrap the first SUPERADMIN with `pnpm db:make-superadmin <email>` (the script lives at [frontend/scripts/make-superadmin.ts](frontend/scripts/make-superadmin.ts)).
 
 ## Files Claude must NOT modify (battle-tested)
 
@@ -92,11 +90,10 @@ If a change is genuinely required in any of these, surface a brief "I am about t
 
 ## Files Claude SHOULD modify (project surface)
 
-- [frontend/prisma/schema.prisma](frontend/prisma/schema.prisma) — add domain models alongside the generic ones (User, Order, Withdrawal, Organization, AdminAction, OAuthAccount, …). Do not rename the generic models.
+- [frontend/prisma/schema.prisma](frontend/prisma/schema.prisma) — add domain models alongside the generic ones (User, Order, Organization, AdminAction, OAuthAccount, …). Do not rename the generic models.
 - `frontend/src/app/api/<resource>/route.ts` — add new Route Handlers; always `export const runtime = 'nodejs'`, call `verifyCsrf(req)` for mutations, `requireAuth(req)` (or admin/org variants) at the top.
 - [frontend/src/lib/server/notifications/templates.ts](frontend/src/lib/server/notifications/templates.ts) — add typed wrappers per notification type (must include a `dedupeKey` for at-most-once delivery)
 - [frontend/src/lib/server/payments/](frontend/src/lib/server/payments/) — add new providers behind the `PaymentProvider` interface (use `bictorys.ts` as reference)
-- [frontend/src/lib/server/withdrawals/guards.ts](frontend/src/lib/server/withdrawals/guards.ts) — add KYC / tier / AML guards (project-specific, not shipped)
 - [frontend/src/lib/server/oauth/](frontend/src/lib/server/oauth/) — add new OAuth providers (`github.ts`, `apple.ts`, …) modeled on `google.ts`; add a sibling route handler under `frontend/src/app/api/auth/oauth/<provider>/{start,callback}/route.ts`
 - [frontend/src/app/](frontend/src/app/) — your pages, your design (including `/admin/*` if you keep the back-office)
 - `frontend/src/lib/server/cron/` — extend with `verifyCronSecret(req)` consumers; add new cron route handlers under `frontend/src/app/api/cron/<name>/route.ts` mirroring the 5 existing crons; ALL cron handlers must verify `Authorization: Bearer ${CRON_SECRET}` via the shared `verifyCronSecret` helper
@@ -109,11 +106,7 @@ If a change is genuinely required in any of these, surface a brief "I am about t
 - Webhook handlers read the raw body via `await req.arrayBuffer()` and hash it BEFORE any JSON parse — calling `await req.json()` first is a silent HMAC-verification regression.
 - Notification dispatchers MUST go through `createNotification(prisma, input)` — never `prisma.notification.create` directly (skips the dedup `P2002` catch).
 - Webhook handlers emit side-effects via the **outbox** (`enqueueOutbox(tx, event)` inside the tx) — never via fire-and-forget closures.
-- Withdrawals must use the advisory-lock + Serializable tx pattern (the `withdrawals/lock.ts` helper does this — just call it). Calling guards + insert outside a tx is a double-spend regression.
 - Payment amounts are **integer in smallest currency unit** (FCFA = no decimals; USD = cents). Never store decimals.
-- `BICTORYS_API_KEY` (charges) and `BICTORYS_PRIVATE_KEY` (payouts) are distinct keys — must NEVER be confused.
-- Withdrawal balance check is ON by default (`WITHDRAWAL_BALANCE_CHECK=0` to disable). Disabling on a real-money project is a financial-safety risk — only do it if you have an alternative ledger.
-- Withdrawal guards return **stable error codes** (`AMOUNT_BELOW_MIN`, `AMOUNT_ABOVE_MAX`, `DAILY_LIMIT_EXCEEDED`, `COOLDOWN_ACTIVE`, `PIN_NOT_SET`, `PIN_REQUIRED`, `PIN_INVALID`, `INSUFFICIENT_BALANCE`). Frontend switches on `ApiError.code`, not translated messages.
 - Frontend `api()` retries only `GET`/`HEAD` on network errors. Do not extend to `POST`/`PUT`/`PATCH`/`DELETE`.
 - Signup issues cookies directly (no email-verification step) and returns `EMAIL_ALREADY_EXISTS` for a taken email — see the Auth model section above for why this trades away enumeration-resistance.
 - Upload route enforces magic-byte validation against `UPLOAD_ALLOWED_MIME` via [frontend/src/lib/server/upload/sniff.ts](frontend/src/lib/server/upload/sniff.ts) — don't bypass by trusting `File.type` alone.
@@ -133,7 +126,7 @@ The starter is **headless on purpose**. Touchpoints if a fork wants a specific d
 - [frontend/src/app/layout.tsx](frontend/src/app/layout.tsx) — Inter font + 2 client contexts (`AuthProvider`, `ToastProvider`). Both are logic-only — swap the font, restyle toasts in your own components, keep the providers (they wrap the `api()` wrapper's auto-refresh + the toast queue).
 - [frontend/src/app/globals.css](frontend/src/app/globals.css) — one line: `@import 'tailwindcss';` (Tailwind v4 zero-config). Drop it + remove `@tailwindcss/postcss` from [frontend/postcss.config.mjs](frontend/postcss.config.mjs) to leave Tailwind out entirely.
 - [frontend/src/app/error.tsx](frontend/src/app/error.tsx) — Tailwind-styled fallback. Replace freely.
-- [examples/frontend-pages/](examples/frontend-pages/) — 11 reference pages (login/signup/verify-email/forgot-reset-password/dashboard/withdrawals/payment-success+failure/auth-error/admin/*). They are NOT imported anywhere — they live as Tailwind references to copy or rebuild.
+- [examples/frontend-pages/](examples/frontend-pages/) — 9 reference pages (login/signup/verify-email/forgot-reset-password/dashboard/payment-success+failure/auth-error/admin/*). They are NOT imported anywhere — they live as Tailwind references to copy or rebuild.
 
 **No server lib reaches into the DOM.** Routes only return `NextResponse.json(...)`. The same backend feeds plain React, shadcn/ui, Mantine, a SwiftUI client, a Flutter app — pick anything.
 
@@ -156,7 +149,6 @@ Anything outside [Files Claude must NOT modify](#files-claude-must-not-modify) i
 - **Notifications** ([frontend/src/lib/server/notifications/templates.ts](frontend/src/lib/server/notifications/templates.ts)) — add new typed templates.
 - **Payments** ([frontend/src/lib/server/payments/](frontend/src/lib/server/payments/)) — add Stripe, Paystack, etc. behind the `PaymentProvider` interface.
 - **OAuth** ([frontend/src/lib/server/oauth/](frontend/src/lib/server/oauth/)) — add GitHub, Apple, etc. modeled on `google.ts`.
-- **Withdrawal guards** ([frontend/src/lib/server/withdrawals/guards.ts](frontend/src/lib/server/withdrawals/guards.ts)) — add KYC / tier / AML rules.
 - **Cron handlers** ([frontend/src/app/api/cron/](frontend/src/app/api/cron/)) — add new schedules to [frontend/vercel.json](frontend/vercel.json) and a sibling route.
 - **CLAUDE.md / README.md / STATUS.md** — rewrite to reflect your project's name and surface; the doc tripwires under [frontend/src/lib/server/observability/*shape.test.ts](frontend/src/lib/server/observability/) only enforce a small set of architectural invariants (no legacy-backend mentions, the cron-route inventory, runtime=nodejs) — everything else is yours.
 

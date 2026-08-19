@@ -73,9 +73,9 @@ Référence env complète avec toutes les flags : voir [`.env.example`](.env.exa
 
 ## Inventaire des routes
 
-40 routes sous `frontend/src/app/api/`. Toutes déclarent `export const runtime = 'nodejs'` (enforced par [`frontend/src/lib/server/observability/runtime-enforcement.test.ts`](frontend/src/lib/server/observability/runtime-enforcement.test.ts)).
+36 routes sous `frontend/src/app/api/`. Toutes déclarent `export const runtime = 'nodejs'` (enforced par [`frontend/src/lib/server/observability/runtime-enforcement.test.ts`](frontend/src/lib/server/observability/runtime-enforcement.test.ts)).
 
-### Auth (`/api/auth/*`) — 9 routes
+### Auth (`/api/auth/*`) — 8 routes
 | Méthode | Path | Auth |
 |---|---|---|
 | POST | `/signup` | aucune (connecte directement — pas d'étape de vérification email) |
@@ -86,7 +86,6 @@ Référence env complète avec toutes les flags : voir [`.env.example`](.env.exa
 | POST | `/forgot-password` | aucune |
 | POST | `/reset-password` | aucune |
 | PUT | `/change-password` | access + CSRF |
-| GET/POST/DELETE | `/withdrawal-pin` | access + CSRF |
 
 ### OAuth — 2 routes
 | Méthode | Path | Auth |
@@ -102,11 +101,10 @@ Référence env complète avec toutes les flags : voir [`.env.example`](.env.exa
 | GET | `/api/notifications/count` | access |
 | GET/PATCH | `/api/notifications/prefs` | access (+CSRF sur PATCH) |
 
-### Orders + Withdrawals — 2 routes
+### Orders — 1 route
 | Méthode | Path | Auth |
 |---|---|---|
 | POST | `/api/orders` | optionnelle |
-| POST/GET | `/api/withdrawals` | access (+CSRF sur POST) |
 
 ### Uploads — 1 route
 | Méthode | Path | Auth |
@@ -129,7 +127,7 @@ Les fichiers uploadés renvoient un `secure_url` Cloudinary servi directement pa
 | `/api/cron/order-expiration` | toutes les 5 min |
 | `/api/cron/webhook-log-purge` | quotidien |
 
-### Admin (`/api/admin/*`) — 12 routes
+### Admin (`/api/admin/*`) — 10 routes
 | Méthode | Path | Auth |
 |---|---|---|
 | GET | `/me` | ADMIN |
@@ -138,8 +136,6 @@ Les fichiers uploadés renvoient un `secure_url` Cloudinary servi directement pa
 | PATCH | `/users/:id/role` | SUPERADMIN + CSRF |
 | PATCH | `/users/:id/status` | ADMIN/SUPERADMIN + CSRF |
 | GET | `/orders` | ADMIN |
-| GET | `/withdrawals` | ADMIN |
-| POST | `/withdrawals/:id/cancel` | SUPERADMIN + CSRF |
 | GET | `/audit-log` | ADMIN |
 | GET | `/outbox` | ADMIN |
 | GET | `/email-queue` | ADMIN |
@@ -182,7 +178,7 @@ Le starter ne ship **aucun composant UI** par design. Ce que tu as :
 - [frontend/src/app/layout.tsx](frontend/src/app/layout.tsx) — font `Inter` + shell `<html>/<body>` + 2 contextes client (`AuthProvider`, `ToastProvider`). Les deux contextes sont **logic-only** (zéro couplage design) — garde-les, restyle les toasts dans tes propres composants
 - [frontend/src/app/error.tsx](frontend/src/app/error.tsx) — error boundary stylé Tailwind ; remplace par le tien
 - [frontend/src/app/globals.css](frontend/src/app/globals.css) — une seule ligne `@import 'tailwindcss';` (Tailwind v4 zero-config). Vire la ligne + retire `@tailwindcss/postcss` de [postcss.config.mjs](frontend/postcss.config.mjs) pour sortir complètement de Tailwind.
-- [examples/frontend-pages/](examples/frontend-pages/) — 11 pages Tailwind de référence (login, signup, verify-email, forgot/reset-password, dashboard, withdrawals, payment-success/failure, auth-error, admin/{layout,users,withdrawals}). Copie et restyle, ou refais à zéro — elles consomment les mêmes routes `/api/*` dans tous les cas.
+- [examples/frontend-pages/](examples/frontend-pages/) — 9 pages Tailwind de référence (login, signup, verify-email, forgot/reset-password, dashboard, payment-success/failure, auth-error, admin/{layout,users}). Copie et restyle, ou refais à zéro — elles consomment les mêmes routes `/api/*` dans tous les cas.
 
 **Aucune lib serveur ne touche au DOM.** Les routes renvoient `NextResponse.json(...)` uniquement. Tu peux ship un UI React vanilla, un front shadcn/ui, un dashboard Mantine, une app iOS SwiftUI via le même contrat JSON — le backend reste inchangé.
 
@@ -243,7 +239,6 @@ Ce sont les règles que chaque session Claude doit respecter — voir [CLAUDE.md
 - Chaque Route Handler exporte `runtime = 'nodejs'` (CI-enforced)
 - Les webhook handlers lisent le raw body via `req.arrayBuffer()` AVANT tout JSON parse (intégrité HMAC)
 - Les notifications passent par `createNotification(prisma, input)` — jamais `prisma.notification.create` directement
-- Les withdrawals utilisent `pg_advisory_xact_lock(hashtext(userId))` dans une tx Serializable (appelle `withUserAdvisoryLock`)
 - Les side-effects webhook passent par l'outbox via `enqueueOutbox(tx, event)` — jamais fire-and-forget
 - Les handlers cron vérifient `Authorization: Bearer ${CRON_SECRET}`
 - Le callback OAuth refuse `email_verified !== true`

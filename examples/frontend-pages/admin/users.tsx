@@ -1,7 +1,7 @@
 // EXAMPLE — copy to frontend/src/app/admin/users/page.tsx and customize.
 // Demonstrates the admin list pattern: search box + cursor pagination
-// against /api/admin/users. The same shape works for orders, withdrawals,
-// and audit-log; just swap the endpoint + columns.
+// against /api/admin/users. The same shape works for orders and
+// audit-log; just swap the endpoint + columns.
 'use client';
 
 import { useEffect, useState } from 'react';

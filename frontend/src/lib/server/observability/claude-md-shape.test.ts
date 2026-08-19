@@ -57,12 +57,11 @@ describe('CLAUDE.md doc tripwire (DOC-01)', () => {
     expect(content).not.toMatch(/middleware-order/);
   });
 
-  it('mentions the canonical Phase 4–5 surface (cron + webhook + withdrawals + upload)', () => {
+  it('mentions the canonical Phase 4–5 surface (cron + webhook + upload)', () => {
     const content = readFileSync(CLAUDE_MD_PATH, 'utf8');
     // /api/cron path lives in the monolith — Phase 5 routes.
     expect(content).toMatch(/\/api\/cron|app\/api\/cron|cron/i);
     expect(content).toMatch(/webhook/i);
-    expect(content).toMatch(/withdrawal/i);
     expect(content).toMatch(/upload/i);
   });
 });

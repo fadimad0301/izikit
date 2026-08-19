@@ -2,8 +2,8 @@
  * Provider-agnostic payments interface.
  *
  * Each provider (Bictorys, Stripe, Paddle…) implements `PaymentProvider`.
- * The orders/withdrawals routes consume the interface — never the concrete
- * adapter — so swapping providers is one wiring change in `index.ts`.
+ * The orders routes consume the interface — never the concrete adapter —
+ * so swapping providers is one wiring change in `index.ts`.
  *
  * Amounts are integer "smallest unit" of `currency`. For XOF (FCFA) that's
  * 1 = 1 FCFA (no decimals). For USD/EUR adapt to cents at the call site.
@@ -50,34 +50,6 @@ export interface ChargeResult {
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// Payout (seller withdrawal)
-// ───────────────────────────────────────────────────────────────────────
-
-export interface PayoutDestination {
-  /** Provider-specific method code, e.g. "WAVE", "ORANGE_MONEY", "FREE_MONEY". */
-  method: string;
-  /** E.164 phone (e.g. "+221771234567"). */
-  phone: string;
-  accountName?: string;
-}
-
-export interface PayoutInput {
-  amount: number;
-  currency: string;
-  destination: PayoutDestination;
-  /** Your withdrawal id — idempotency key. */
-  externalRef: string;
-}
-
-export type PayoutStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
-
-export interface PayoutResult {
-  providerPayoutId: string;
-  status: PayoutStatus;
-  failureReason?: string;
-}
-
-// ───────────────────────────────────────────────────────────────────────
 // Refund
 // ───────────────────────────────────────────────────────────────────────
 
@@ -103,9 +75,6 @@ export interface PaymentProvider {
   name: string;
 
   charge(input: ChargeInput): Promise<ChargeResult>;
-
-  /** Optional — providers without payouts simply don't implement it. */
-  payout?(input: PayoutInput): Promise<PayoutResult>;
 
   /** Optional — providers without refunds simply don't implement it. */
   refund?(input: RefundInput): Promise<RefundResult>;

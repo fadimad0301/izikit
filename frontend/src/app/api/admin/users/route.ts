@@ -9,8 +9,8 @@
 //     prisma.user.findMany(take=limit+1, orderBy createdAt DESC, id DESC) →
 //     buildPage → return { items, nextCursor }
 //
-// PII whitelist: USER_SELECT excludes passwordHash / withdrawalPinHash /
-// tokenVersion (T-03-02-02 — info-disclosure mitigation). The admin UI
+// PII whitelist: USER_SELECT excludes passwordHash / tokenVersion
+// (T-03-02-02 — info-disclosure mitigation). The admin UI
 // only needs identity + role + status + createdAt.
 //
 // Empty result → 200 { items: [], nextCursor: null } per D-LIST-05 — never 404.

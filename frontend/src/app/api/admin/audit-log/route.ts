@@ -9,7 +9,7 @@
 // Filters (D-AUDIT-01):
 //   ?actor       — exact match on actorId
 //   ?action      — exact match on the dotted-string action key (e.g. "user.role_change")
-//   ?targetType  — exact match on the targetType column (e.g. "User", "Withdrawal")
+//   ?targetType  — exact match on the targetType column (e.g. "User", "Order")
 //   ?since       — ISO 8601 string → createdAt >= since
 //   ?until       — ISO 8601 string → createdAt <= until
 //   ?cursor      — opaque base64 cursor from a prior page's nextCursor

@@ -2,7 +2,7 @@
 //
 // Returns the authenticated admin's role + a static capability list keyed
 // by role. Front-ends use the `can` array to render conditional UI
-// (e.g. show the "Cancel Withdrawal" button only when 'withdrawals:cancel'
+// (e.g. show the "Suspend user" button only when 'users:status:suspend'
 // is present). The list is informational ONLY — every mutating route
 // re-checks role server-side via `requireAdmin('SUPERADMIN')` etc., so a
 // client that lies about its capabilities cannot escalate.
@@ -14,11 +14,10 @@
 // here too, so a polling UI cannot burn the back-office budget.
 //
 // CAPABILITY LIST CONTRACT (D-ADMIN-04 — locked):
-//   ADMIN sees 8 capabilities: users:read, users:status:suspend,
-//     orders:read, withdrawals:read, audit-log:read, outbox:read,
-//     email-queue:read, rate-limits:read.
-//   SUPERADMIN sees 11: same 8 + users:role + users:status:restore +
-//     withdrawals:cancel.
+//   ADMIN sees 7 capabilities: users:read, users:status:suspend,
+//     orders:read, audit-log:read, outbox:read, email-queue:read,
+//     rate-limits:read.
+//   SUPERADMIN sees 9: same 7 + users:role + users:status:restore.
 //
 // Front-end teams can pivot off this shape; changing the list is a
 // breaking change to the back-office UI.
@@ -35,7 +34,6 @@ const CAPABILITIES_BY_ROLE: Record<'ADMIN' | 'SUPERADMIN', readonly string[]> = 
     'users:read',
     'users:status:suspend',
     'orders:read',
-    'withdrawals:read',
     'audit-log:read',
     'outbox:read',
     'email-queue:read',
@@ -47,8 +45,6 @@ const CAPABILITIES_BY_ROLE: Record<'ADMIN' | 'SUPERADMIN', readonly string[]> = 
     'users:status:suspend',
     'users:status:restore',
     'orders:read',
-    'withdrawals:read',
-    'withdrawals:cancel',
     'audit-log:read',
     'outbox:read',
     'email-queue:read',

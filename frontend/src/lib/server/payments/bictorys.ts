@@ -1,16 +1,10 @@
 /**
- * Bictorys provider — charges (Wave / Orange Money / Free Money), payouts,
- * and webhook signature verification.
+ * Bictorys provider — charges (Wave / Orange Money / Free Money) and
+ * webhook signature verification.
  *
- * Two API keys, NEVER mixed:
- *   - BICTORYS_API_KEY      — public key for charges (customer payments)
- *   - BICTORYS_PRIVATE_KEY  — secret key for payouts (seller withdrawals)
- *
- * If `BICTORYS_PRIVATE_KEY` is missing, the provider still works for
- * charges — `payout()` throws explicitly. Calls to `refund()` throw
- * "Refund not supported" (the Bictorys public API does not expose a
- * documented refund endpoint at the time of writing — adapt here if
- * your contract includes one).
+ * Calls to `refund()` throw "Refund not supported" (the Bictorys public
+ * API does not expose a documented refund endpoint at the time of
+ * writing — adapt here if your contract includes one).
  *
  * WAF retry: charges are retried up to 3 times on HTTP 403 with exponential
  * backoff (2s, 4s, 8s) — this matches the cagnottes.sn pattern that
@@ -33,8 +27,6 @@ import type {
   PaymentProvider,
   ChargeInput,
   ChargeResult,
-  PayoutInput,
-  PayoutResult,
   RefundInput,
   RefundResult,
 } from './provider';
@@ -48,17 +40,10 @@ const logger = createLogger();
 export interface BictorysEnv {
   /** Public key for /pay/v1/charges. Required. */
   BICTORYS_API_KEY: string;
-  /** Private key for /pay/v1/payouts. Required only for payouts. */
-  BICTORYS_PRIVATE_KEY?: string;
   /** Base URL, e.g. "https://api.bictorys.com" or test sim. */
   BICTORYS_API_URL: string;
   /** Shared secret used for the simple `x-secret-key` webhook header. */
   BICTORYS_WEBHOOK_SECRET: string;
-  /**
-   * Merchant secret code. Bictorys requires this in the payout body
-   * (`merchant.secretCode`). Required only for payouts.
-   */
-  BICTORYS_MERCHANT_SECRET_CODE?: string;
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -125,17 +110,6 @@ function classifyStatus(raw: string | undefined): 'PENDING' | 'PAID' | 'FAILED' 
   if (s === 'succeeded' || s === 'paid' || s === 'success' || s === 'completed') return 'PAID';
   if (s === 'failed' || s === 'cancelled' || s === 'canceled' || s === 'rejected' || s === 'error')
     return 'FAILED';
-  return 'PENDING';
-}
-
-function classifyPayoutStatus(
-  raw: string | undefined,
-): 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' {
-  const s = String(raw ?? '').toLowerCase();
-  if (s === 'succeeded' || s === 'completed' || s === 'paid' || s === 'success') return 'COMPLETED';
-  if (s === 'failed' || s === 'rejected' || s === 'error' || s === 'cancelled' || s === 'canceled')
-    return 'FAILED';
-  if (s === 'processing') return 'PROCESSING';
   return 'PENDING';
 }
 
@@ -270,94 +244,6 @@ export function createBictorysProvider(env: BictorysEnv): BictorysProviderHandle
     throw new Error(`Bictorys charge failed after retries: ${lastErr.slice(0, 200)}`);
   }
 
-  // ── payout ─────────────────────────────────────────────────────────
-  async function payout(input: PayoutInput): Promise<PayoutResult> {
-    if (!env.BICTORYS_PRIVATE_KEY) {
-      throw new Error(
-        'Bictorys payout disabled — BICTORYS_PRIVATE_KEY is not configured. Set it to enable withdrawals.',
-      );
-    }
-    if (!env.BICTORYS_MERCHANT_SECRET_CODE) {
-      throw new Error(
-        'Bictorys payout disabled — BICTORYS_MERCHANT_SECRET_CODE is not configured.',
-      );
-    }
-
-    const paymentType = mapMethodToBictorysType(input.destination.method);
-    const url = `${baseUrl}/pay/v1/payouts?payment_type=${encodeURIComponent(paymentType)}`;
-
-    const phone = input.destination.phone.startsWith('+')
-      ? input.destination.phone
-      : `+${input.destination.phone}`;
-
-    const body: Record<string, unknown> = {
-      amount: input.amount,
-      currency: input.currency,
-      country: 'SN',
-      customerObject: {
-        name: input.destination.accountName ?? 'Recipient',
-        phone,
-        country: 'SN',
-        locale: 'fr-FR',
-      },
-      transactionType: 'payment',
-      paymentReason: 'Payout',
-      merchantReference: input.externalRef,
-      merchant: { secretCode: env.BICTORYS_MERCHANT_SECRET_CODE },
-    };
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'X-API-Key': env.BICTORYS_PRIVATE_KEY,
-          'Content-Type': 'application/json',
-          accept: 'application/json',
-          'idempotency-key': input.externalRef,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-    } catch (err) {
-      clearTimeout(timer);
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`Bictorys payout network error: ${msg}`);
-    }
-    clearTimeout(timer);
-
-    const raw = await res.text();
-    let data: Record<string, unknown> | undefined;
-    try {
-      data = raw ? (JSON.parse(raw) as Record<string, unknown>) : undefined;
-    } catch {
-      throw new Error(
-        `Bictorys payout returned non-JSON (HTTP ${res.status}): ${raw.slice(0, 200)}`,
-      );
-    }
-
-    if (res.status === 200 || res.status === 201) {
-      const providerPayoutId = String((data?.id as string | undefined) ?? '');
-      if (!providerPayoutId) throw new Error('Bictorys payout returned no id');
-      const result: PayoutResult = {
-        providerPayoutId,
-        status: classifyPayoutStatus(data?.status as string | undefined),
-      };
-      const failureReason =
-        (data?.message as string | undefined) ?? (data?.error as string | undefined);
-      if (failureReason) result.failureReason = failureReason;
-      return result;
-    }
-
-    const message =
-      (data?.message as string | undefined) ??
-      (data?.error as string | undefined) ??
-      `HTTP ${res.status}`;
-    throw new Error(`Bictorys payout failed: ${message}`);
-  }
-
   // ── refund (not supported by Bictorys API at time of writing) ─────
   async function refund(_input: RefundInput): Promise<RefundResult> {
     throw new Error('Refund not supported by Bictorys provider');
@@ -430,7 +316,6 @@ export function createBictorysProvider(env: BictorysEnv): BictorysProviderHandle
   return {
     name: 'bictorys',
     charge,
-    payout,
     refund,
     webhookProvider,
   };

@@ -17,7 +17,6 @@ model User {
   passwordHash      String?
   emailVerifiedAt   DateTime?
   tokenVersion      Int       @default(0)
-  withdrawalPinHash String? // bcrypt hash of withdrawal PIN; null = no PIN set
   // Optional display name — populated from OAuth profile on first sign-in.
   // Email/password users can fill it later via /api/auth/me PATCH (future).
   name              String?
@@ -43,7 +42,6 @@ model User {
   notifications     Notification[]
   notifPrefs        NotificationPreferences?
   orders            Order[]
-  withdrawals       Withdrawal[]
   oauthAccounts     OAuthAccount[]
   adminActions      AdminAction[]
   cvProfile         CvProfile?
@@ -66,7 +64,7 @@ model User {
 // answer "who did what when" during incidents / compliance reviews.
 //
 // `action` is a free-form dotted string the UI groups by (e.g.
-// "withdrawal.cancel", "user.role_change", "order.refund").
+// "user.role_change", "order.refund").
 // `targetType` + `targetId` reference the affected row when applicable.
 // `metadata` carries the diff or extra context as JSON.
 //
@@ -94,7 +92,7 @@ model AdminAction {
 // ───────────────────────────────────────────────────────────────────────
 // Multi-tenancy primitives — opt-in.
 //
-// Default project surface stays user-owned (`Order.userId`, `Withdrawal.userId`).
+// Default project surface stays user-owned (`Order.userId`).
 // Apps that need orgs add `organizationId String?` to their domain models
 // case by case and use `requireOrgRole()` middleware to gate access.
 //
@@ -258,7 +256,7 @@ model NotificationPreferences {
 
 // ───────────────────────────────────────────────────────────────────────
 // Outbox — durable side-effects (notifications, emails) emitted from
-// inside transactions (e.g. webhook handlers, withdrawal flow). Side-effect
+// inside transactions (e.g. webhook handlers). Side-effect
 // rows are inserted in the same tx as the state change, then a worker
 // drains them. Survives crashes the previous postCommit-callback pattern
 // silently dropped.
@@ -297,7 +295,7 @@ model WebhookLog {
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// Phase 3 — payments (Order + Withdrawal)
+// Phase 3 — payments (Order)
 //
 // `amount` is stored in the smallest unit of `currency` (no decimals).
 // For XOF (FCFA, Senegal) that's 1 = 1 FCFA. For USD adapt to cents
@@ -416,27 +414,4 @@ model ProcedureDocument {
 
   @@unique([userId, procedureId, checklistItemId])
   @@index([userId, procedureId])
-}
-
-model Withdrawal {
-  id          String @id @default(cuid())
-  userId      String
-  user        User   @relation(fields: [userId], references: [id], onDelete: Restrict)
-  amount      Int // requested amount, smallest unit
-  currency    String @default("XOF")
-  status      String @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED | CANCELLED
-  destination Json // { method: "WAVE" | "ORANGE_MONEY" | ..., phone: "+221...", accountName?: "..." }
-
-  // Provider reference
-  provider         String // e.g. "bictorys"
-  providerPayoutId String? @unique
-  failureReason    String?
-
-  requestedAt DateTime  @default(now())
-  processedAt DateTime?
-  completedAt DateTime?
-
-  @@index([userId, requestedAt])
-  @@index([status, requestedAt])
-  @@index([provider, providerPayoutId])
 }
