@@ -139,8 +139,8 @@ async function dispatchEvent(deps: OutboxDispatcherDeps, event: OutboxEvent): Pr
       const { to, orderId, amount, currency } = event.payload;
       await deps.emailQueue.enqueue({
         to,
-        subject: 'Payment received',
-        html: `<p>Your order <strong>${orderId}</strong> for ${amount} ${currency} is confirmed. Thank you!</p>`,
+        subject: 'Paiement reçu',
+        html: `<p>Votre commande <strong>${orderId}</strong> de ${amount} ${currency} est confirmée. Merci !</p>`,
       });
       return;
     }

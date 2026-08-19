@@ -25,8 +25,8 @@ export function welcomeNotification(userId: string, email: string): CreateNotifi
   return {
     userId,
     type: 'WELCOME',
-    title: 'Welcome!',
-    body: `Glad to have you on board, ${email}.`,
+    title: 'Bienvenue !',
+    body: `Ravis de vous compter parmi nous, ${email}.`,
     dedupeKey: `welcome:${userId}`,
   };
 }
@@ -44,8 +44,8 @@ export function paymentReceived(
   return {
     userId,
     type: 'PAYMENT_RECEIVED',
-    title: 'Payment received',
-    body: `Order ${orderId} for ${amount} ${currency} confirmed.`,
+    title: 'Paiement reçu',
+    body: `Commande ${orderId} de ${amount} ${currency} confirmée.`,
     data: { orderId, amount, currency },
     dedupeKey: `payment-received:${orderId}`,
   };
