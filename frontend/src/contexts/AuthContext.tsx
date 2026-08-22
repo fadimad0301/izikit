@@ -32,6 +32,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Dev-only auto-login — set NEXT_PUBLIC_DEV_AUTO_LOGIN=1 to skip the
+// signup/login screens while testing other flows locally. Logs in as the
+// seeded dev user from `frontend/scripts/seed-dev.ts` (run `pnpm seed:dev`
+// once first). Guarded by NODE_ENV so a forgotten flag can never activate
+// in a production build. Reversible in one second: unset the env var.
+const DEV_AUTO_LOGIN_EMAIL = 'user@example.com';
+const DEV_AUTO_LOGIN_PASSWORD = 'UserPassword123!';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,6 +69,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const devAutoLogin = useCallback(async () => {
+    try {
+      await api('/api/auth/login', {
+        method: 'POST',
+        body: { email: DEV_AUTO_LOGIN_EMAIL, password: DEV_AUTO_LOGIN_PASSWORD },
+      });
+      await fetchUser();
+    } catch {
+      // Seed user missing/wrong password (e.g. `pnpm seed:dev` not run yet)
+      // — fall back to the normal logged-out state instead of blocking the app.
+      console.warn(
+        '[NEXT_PUBLIC_DEV_AUTO_LOGIN] auto-login failed — run `pnpm seed:dev` and retry.',
+      );
+      setLoading(false);
+    }
+  }, [fetchUser]);
+
   useEffect(() => {
     // Skip /me for anonymous visitors — the JS-readable CSRF cookie is only
     // set after login, so its absence is a reliable "no session" signal.
@@ -68,12 +93,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const hasCookie = document.cookie
       .split(';')
       .some((c) => c.trim().startsWith(`${csrfCookieName}=`));
-    if (!hasCookie) {
-      setLoading(false);
+    if (hasCookie) {
+      void fetchUser();
       return;
     }
-    void fetchUser();
-    // Run once on mount; fetchUser is stable.
+    if (process.env.NEXT_PUBLIC_DEV_AUTO_LOGIN === '1' && process.env.NODE_ENV !== 'production') {
+      void devAutoLogin();
+      return;
+    }
+    setLoading(false);
+    // Run once on mount; fetchUser/devAutoLogin are stable.
   }, []);
 
   const logout = useCallback(async () => {

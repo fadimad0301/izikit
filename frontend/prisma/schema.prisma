@@ -47,6 +47,7 @@ model User {
   cvProfile         CvProfile?
   procedureAccess   ProcedureAccess[]
   procedureDocuments ProcedureDocument[]
+  generatedDocuments GeneratedDocument[]
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
@@ -206,6 +207,32 @@ model CvProfile {
   generatedAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Doxi — AI-generated documents beyond the CV (lettre de motivation, lettre
+// de recommandation, …). One draft per (user, type) — same "single draft,
+// last-write-wins" shape as CvProfile. `type` is one of the keys in
+// `DOCUMENT_TYPES` (frontend/src/lib/validation/document-types.ts); adding a
+// new document type needs no migration, just a new registry entry.
+//
+// `answers` shape is owned by that type's zod schema in the same file (not
+// enforced at the DB layer — same pattern as CvProfile.answers). `content`
+// is the AI-generated result (GeneratedDocumentContent: title + paragraphs).
+// ───────────────────────────────────────────────────────────────────────
+model GeneratedDocument {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String
+  answers     Json      @default("{}")
+  content     Json?
+  generatedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, type])
+  @@index([userId, type])
 }
 
 // ───────────────────────────────────────────────────────────────────────

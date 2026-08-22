@@ -1,6 +1,7 @@
 export { Button } from './Button';
 export { Card } from './Card';
 export { Input } from './Input';
+export { Textarea } from './Textarea';
 export { Toggle } from './Toggle';
 export { Badge } from './Badge';
 export { Modal } from './Modal';

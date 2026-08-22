@@ -1,8 +1,19 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 import { generatedCvSchema, type CvAnswers, type GeneratedCv } from '@/lib/validation/cv-wizard';
+import {
+  generatedDocumentSchema,
+  type DocumentType,
+  type GeneratedDocumentContent,
+} from '@/lib/validation/document-types';
 import { z } from 'zod';
-import type { AiProvider, CvGenerationInput, CvAnalysisInput, CvAnalysis } from './provider';
+import type {
+  AiProvider,
+  CvGenerationInput,
+  CvAnalysisInput,
+  CvAnalysis,
+  DocumentGenerationInput,
+} from './provider';
 
 export interface CreateClaudeProviderOptions {
   apiKey: string;
@@ -96,6 +107,63 @@ function buildAnalysisUserPrompt(input: CvAnalysisInput): string {
   return JSON.stringify({ cv: input.generatedCv, procedure: input.procedure }, null, 2);
 }
 
+const DOCUMENT_TOOL_NAME = 'emit_document';
+
+const DOCUMENT_TOOL = {
+  name: DOCUMENT_TOOL_NAME,
+  description: 'Emit the finished document content as structured JSON.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      title: { type: 'string' as const, description: 'A short title for the document, in French.' },
+      paragraphs: {
+        type: 'array' as const,
+        items: { type: 'string' as const },
+        description: 'The document body, one paragraph per array entry, in French.',
+      },
+    },
+    required: ['title', 'paragraphs'],
+  },
+};
+
+// One system prompt per document type — each explains who's "speaking" (the
+// student for a cover letter, the recommender for a recommendation letter),
+// the register, and the structure. Adding a document type: add its prompt
+// here and register the type in lib/validation/document-types.ts.
+const DOCUMENT_SYSTEM_PROMPTS: Record<DocumentType, string> = {
+  COVER_LETTER: [
+    'Tu es un assistant qui aide des étudiants ouest-africains à rédiger une lettre de ' +
+      "motivation pour une candidature à l'étranger (bourse, admission, procédure de visa études).",
+    "Rédige la lettre à la première personne, comme si c'était l'étudiant qui écrivait lui-même, " +
+      "en français soutenu et professionnel (vouvoiement — la lettre s'adresse à un comité " +
+      "d'admission ou un jury).",
+    'Structure la lettre en paragraphes clairs : accroche, motivation et lien avec le programme ' +
+      'visé, expérience pertinente, projet professionnel, formule de politesse finale.',
+    "RÈGLE ABSOLUE : n'invente aucun fait, diplôme, expérience ou résultat qui n'est pas " +
+      'explicitement fourni par l’étudiant. Si une information manque, ne comble pas le vide — ' +
+      'reste sobre et fidèle aux données reçues.',
+    'Réponds uniquement en appelant l’outil emit_document avec le titre et les paragraphes.',
+  ].join('\n'),
+  RECOMMENDATION_LETTER: [
+    'Tu es un assistant qui aide à rédiger une lettre de recommandation pour un étudiant ' +
+      "ouest-africain candidatant à l'étranger (bourse, admission, procédure de visa études).",
+    'Rédige la lettre à la première personne, du point de vue du recommandataire (la personne ' +
+      "qui recommande l'étudiant — professeur, employeur, encadrant…), en français soutenu et " +
+      "professionnel (vouvoiement — la lettre s'adresse à un comité d'admission ou un jury).",
+    'Structure la lettre en paragraphes clairs : présentation du recommandataire et de sa ' +
+      'relation avec l’étudiant, qualités et compétences observées avec des exemples concrets, ' +
+      'recommandation explicite pour le programme visé, formule de politesse finale.',
+    "RÈGLE ABSOLUE : n'invente aucun fait, qualité ou exemple qui n'est pas explicitement " +
+      'fourni. Si une information manque, ne comble pas le vide — reste sobre et fidèle aux ' +
+      'données reçues.',
+    'Réponds uniquement en appelant l’outil emit_document avec le titre et les paragraphes.',
+  ].join('\n'),
+};
+
+function buildDocumentUserPrompt(answers: Record<string, unknown>): string {
+  return JSON.stringify(answers, null, 2);
+}
+
 export function createClaudeProvider(options: CreateClaudeProviderOptions): AiProvider {
   const client = new Anthropic({ apiKey: options.apiKey });
   const model = options.model ?? DEFAULT_MODEL;
@@ -147,6 +215,29 @@ export function createClaudeProvider(options: CreateClaudeProviderOptions): AiPr
       }
 
       return cvAnalysisSchema.parse(toolUse.input);
+    },
+
+    async generateDocument({
+      type,
+      answers,
+    }: DocumentGenerationInput): Promise<GeneratedDocumentContent> {
+      const response = await client.messages.create({
+        model,
+        max_tokens: 4000,
+        system: DOCUMENT_SYSTEM_PROMPTS[type],
+        messages: [{ role: 'user', content: buildDocumentUserPrompt(answers) }],
+        tools: [DOCUMENT_TOOL],
+        tool_choice: { type: 'tool', name: DOCUMENT_TOOL_NAME },
+      });
+
+      const toolUse = response.content.find(
+        (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
+      );
+      if (!toolUse) {
+        throw new Error('Claude response did not include the expected tool_use block');
+      }
+
+      return generatedDocumentSchema.parse(toolUse.input);
     },
   };
 }

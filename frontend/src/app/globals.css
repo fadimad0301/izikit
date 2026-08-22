@@ -61,7 +61,7 @@
   body {
     background: white;
   }
-  #cv-print-area {
+  .print-area {
     border: none;
     box-shadow: none;
     padding: 0;
